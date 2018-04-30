@@ -96,3 +96,5 @@ pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
 pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
 pl.legend(loc=0)
 sub.set_title('OT by CMs')
+
+print("Test")
