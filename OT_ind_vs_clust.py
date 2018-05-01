@@ -20,8 +20,8 @@ cov_target = np.array([[1, 0], [0, 1]])
 num_clust_source = mu_source.shape[0]
 num_clust_target = mu_target.shape[0]
 
-xs = np.vstack([ot.datasets.get_2D_samples_gauss(n_source/num_clust_source,  mu_source[i,:], cov_source) for i in range(num_clust_source)])
-xt = np.vstack([ot.datasets.get_2D_samples_gauss(n_target/num_clust_target,  mu_target[i,:], cov_target) for i in range(num_clust_target)])
+xs = np.vstack([ot.datasets.get_2D_samples_gauss(np.floor(n_source/num_clust_source).astype(int),  mu_source[i,:], cov_source) for i in range(num_clust_source)])
+xt = np.vstack([ot.datasets.get_2D_samples_gauss(np.floor(n_target/num_clust_target).astype(int),  mu_target[i,:], cov_target) for i in range(num_clust_target)])
 
 ind_clust_source = np.vstack([i*np.ones(n_source/num_clust_source) for i in range(num_clust_source)])
 ind_clust_target = np.vstack([i*np.ones(n_target/num_clust_target) for i in range(num_clust_target)])
