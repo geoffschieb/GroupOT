@@ -4,87 +4,17 @@ import matplotlib
 import ot
 import scipy as sp
 import matplotlib.pylab as pl
-from mpl_toolkits.mplot3d import Axes3D 
+from mpl_toolkits.mplot3d import axes3d 
 from sklearn.cluster import KMeans
 
-def check_gradient():
-    (loss, log) = ot.sinkhorn2(a, b, M, lambd, log = True)
-    subgrad = lambd * np.log(log["u"])
-    subgrad = subgrad.reshape((subgrad.shape[0],))
-    subgrad -= np.mean(subgrad)
-    eps = 1e-4
-    grad = np.zeros(a.shape[0])
-    for i in range(a.shape[0]):
-        direction = np.zeros(a.shape[0])
-        direction[i] = 1
-        direction -= np.mean(direction)
-        grad[i] = (ot.sinkhorn2(a + eps * direction, b, M, lambd) - loss)/eps
+def barycenter_bregman(b1, b2, M1, M2, w1, w2, entr_reg,
+        verbose = False,
+        tol = 1e-7,
+        max_iter = 500
+        ):
 
-    print(a.shape)
-    print(subgrad.shape)
-    loss2 = ot.sinkhorn2(a - 0.1 * subgrad, b, M, lambd)
-    # disturbed_subgrad = subgrad + 0.01 * np.random.normal(size = (subgrad.shape[0],))
-    # disturbed_subgrad -= np.mean(disturbed_subgrad)
-    # loss3 = ot.sinkhorn2(a - 0.01 * disturbed_subgrad, b, M, lambd)
-    print(loss)
-    print(loss2)
-    # print(loss3)
-    return (grad, subgrad)
-
-def min_a(b, M, lambd):
-    n = M.shape[0]
-    a_tilde = np.ones(n)/n
-    a_hat = a_tilde.copy()
-    a_hat_old = a_hat.copy()
-    converged = False
-    t = 0.5
-    tol = 1e-5
-    its = 0
-    gamma = 1e-2
-
-    while not converged:
-        # its += 1
-        # print("Iteration: {}".format(its))
-        # beta = (t+1)/2
-        # a = (1 - 1/beta)*a_hat + 1/beta * a_tilde
-        # (_, log) = ot.sinkhorn2(a, b, M, lambd, log = True)
-        # u = log["u"].reshape(n)
-        # alpha = lambd * np.log(u)
-        # alpha -= np.mean(alpha)
-        # # a_tilde *= u**(-t * beta * lambd)
-        # a_tilde *= np.exp(-t * beta * alpha)
-        # a_tilde /= np.sum(a_tilde)
-        # a_hat_old = a_hat.copy()
-        # a_hat = (1 - 1/beta) * a_hat + 1/beta * a_tilde
-        # t += 1
-
-        its += 1
-        print("Iteration: {}".format(its))
-        beta = (t+1)/2
-        a = (1 - 1/beta)*a_hat + 1/beta * a_tilde
-        (_, log) = ot.sinkhorn2(a, b, M, lambd, log = True)
-        u = log["u"].reshape(n)
-        alpha = lambd * np.log(u)
-        alpha -= np.mean(alpha)
-        # a_tilde *= u**(-t * beta * lambd)
-        a_hat_old = a_hat.copy()
-        a_hat -= gamma * alpha
-        a_hat[a_hat < 0] = 0
-        a_hat /= np.sum(a_hat)
-
-        print(a_hat_old)
-        print(a_hat)
-
-        if np.linalg.norm(a_hat - a_hat_old) < tol:
-            converged = True
-
-    return a_hat
-
-def barycenter_bregman(b1, b2, M1, M2, lambd):
-    tol = 1e-7
-
-    K1 = np.exp(-M1/lambd)
-    K2 = np.exp(-M2/lambd)
+    K1 = np.exp(-M1/entr_reg)
+    K2 = np.exp(-M2/entr_reg)
     K1t = K1.T.copy()
     K2t = K2.T.copy()
     n = K1.shape[0]
@@ -100,9 +30,10 @@ def barycenter_bregman(b1, b2, M1, M2, lambd):
     converged = False
     its = 0
 
-    while not converged and its < 500: 
+    while not converged and its < max_iter: 
         its += 1
-        # print("Iteration: {}".format(its))
+        if verbose:
+            print("Barycenter weights iteration: {}".format(its))
 
         v1 = np.divide(b1, np.dot(K1t, u1))
         v2 = np.divide(b2, np.dot(K2t, u2))
@@ -110,7 +41,7 @@ def barycenter_bregman(b1, b2, M1, M2, lambd):
         Kv2 = np.dot(K2, v2)
         uKv1 = u1 * Kv1
         uKv2 = u2 * Kv2
-        p = np.exp(np.log(uKv1) * 1/2 + np.log(uKv2) * 1/2)
+        p = np.exp(np.log(uKv1) * w1 + np.log(uKv2) * w2)
         u1 = np.divide(u1 * p, uKv1)
         u2 = np.divide(u2 * p, uKv2)
 
@@ -126,7 +57,8 @@ def barycenter_bregman(b1, b2, M1, M2, lambd):
         err = np.linalg.norm(u1 - u1_old)/np.linalg.norm(u1) + np.linalg.norm(v1 - v1_old) / np.linalg.norm(v1)
         err += np.linalg.norm(u2 - u2_old)/np.linalg.norm(u2) + np.linalg.norm(v2 - v2_old) / np.linalg.norm(v2)
         # print(err)
-        # print(u1)
+        # if its == 1:
+        #     print(u1)
         # print(v1)
         u1_old = u1.copy()
         v1_old = v1.copy()
@@ -141,37 +73,85 @@ def barycenter_bregman(b1, b2, M1, M2, lambd):
     # return np.dot(gamma1, np.ones(K1.shape[1]))
     return (gamma1, gamma2)
 
-def barycenter_free(b1, b2, xs1, xs2, lambd, k):
-    tol = 1e-5
+def barycenter_free(b1, b2, xs1, xs2, w1, w2, entr_reg, k,
+        tol = 1e-5,
+        max_iter = 100,
+        verbose = False
+        ):
 
     d = xs1.shape[1]
     ys = np.random.normal(size = (k, d))
-    cost_old = 0
+    cost_old = np.float("Inf")
     its = 0
     converged = False
 
-    while not converged:
+    while not converged and its < max_iter:
         its += 1
-        print("Outer iteration: {}".format(its))
+        if verbose:
+            print("Barycenter points iteration: {}".format(its))
+
+        if its > 1:
+            ys = (w1 * np.matmul(gamma1, xs1) + w2 * np.matmul(gamma2, xs2))/(np.dot((w1 * np.sum(gamma1, axis = 1) + w2 * np.sum(gamma2, axis = 1)).reshape((k, 1)), np.ones((1, d))))
 
         M1 = ot.dist(ys, xs1)
         M2 = ot.dist(ys, xs2)
-        (gamma1, gamma2) = barycenter_bregman(b1, b2, M1, M2, lambd)
-        # cost = 0.5 * (np.sum(gamma1 * M1) + np.sum(gamma2 * M2)) - lambd * (np.sum(gamma1 * np.log(gamma1)) + np.sum(gamma2 * np.log(gamma2)))
+        (gamma1, gamma2) = barycenter_bregman(b1, b2, M1, M2, w1, w2, entr_reg)
+        cost = (w1 * np.sum(gamma1 * M1) + w2 * np.sum(gamma2 * M2)) + entr_reg * (w1 * stats.entropy(gamma1.reshape((-1,1))) + w2 * stats.entropy(gamma2.reshape((-1,1))))
         # TODO: Calculate the entropy safely
-        cost = 0.5 * (np.sum(gamma1 * M1) + np.sum(gamma2 * M2))
-        ys = (np.matmul(gamma1, xs1) + np.matmul(gamma2, xs2))/(np.dot((np.sum(gamma1, axis = 1) + np.sum(gamma2, axis = 1)).reshape((k, 1)), np.ones((1, d))))
+        # cost = w1 * np.sum(gamma1 * M1) + w2 * np.sum(gamma2 * M2)
 
-        err = abs(cost - cost_old)
+        err = abs(cost - cost_old)/max(abs(cost), 1e-12)
         cost_old = cost.copy()
-        print(err)
+        if verbose:
+            print("Relative change in points iteration: {}".format(err))
         if err < tol:
             converged = True
 
-    return (ys, np.dot(gamma1, np.ones(gamma1.shape[1])))
+    return (ys, np.dot(gamma1, np.ones(gamma1.shape[1])), cost, gamma1, gamma2)
 
+def cluster_ot(b1, b2, xs1, xs2, k1, k2,
+        source_reg, target_reg, entr_reg,
+        tol = 1e-4, max_iter = 100,
+        verbose = True):
 
-# Barycenter histogram test
+    converged = False
+
+    d = xs1.shape[1]
+    zs1  = np.random.normal(size = (k1, d))
+    zs2  = np.random.normal(size = (k2, d))
+    a1 = np.ones(k1)/k1
+    a2 = np.ones(k2)/k2
+
+    w_left = 1 + source_reg
+    w_right = 1 + target_reg
+    w_1 = source_reg/w_left
+    w_mid_1 = 1/w_left
+    w_mid_2 = 1/w_right
+    w_2 = target_reg/w_right
+
+    its = 0
+
+    cost_old = np.float("Inf")
+    
+    while not converged and its < max_iter:
+        its += 1
+        if verbose:
+            print("Alternating barycenter iteration: {}".format(its))
+        # Alternate between computing barycenters
+        (zs1, a1, cost1, mid_left_source, mid_left_mid_right) = barycenter_free(b1, a2, xs1, zs2, w_1, w_mid_1, entr_reg, k1)
+        (zs2, a2, cost2, mid_right_mid_left, mid_right_target) = barycenter_free(a1, b2, zs1, xs2, w_mid_2, w_2, entr_reg, k2)
+        cost = w_left * cost1 + w_right * cost2
+
+        err = abs(cost - cost_old)/max(abs(cost), 1e-12)
+        if verbose:
+            print("Alternating barycenter relative error: {}".format(err))
+        cost_old = cost.copy()
+        if err < tol:
+            converged = True
+
+    return (zs1, zs2, a1, a2, mid_left_source, mid_right_mid_left, mid_right_target)
+
+### Barycenter histogram test
 
 # lambd = 1e-2
 # # n = 20
@@ -199,25 +179,136 @@ def barycenter_free(b1, b2, xs1, xs2, lambd, k):
 # M = ot.dist(x_combined, x_combined)
 # a_ot = ot.bregman.barycenter(b_combined, M, lambd)
 
-# Barycenter fixed point test
+# ### Barycenter fixed point test
 
-lambd = 0.1
-cov1 = np.array([[1, 0], [0, 1]])
-cov2 = np.array([[1, 0], [0, 1]])
-mu1 = np.zeros(2)
-mu2 = np.zeros(2)
-n = 400
-k = 100
-xs1 = ot.datasets.get_2D_samples_gauss(n, mu1, cov1)
-xs2 = ot.datasets.get_2D_samples_gauss(n, mu2, cov2)
-xs1 /= np.dot(np.linalg.norm(xs1, axis = 1).reshape(n, 1), np.ones((1, 2)))
-xs2 /= np.dot(np.linalg.norm(xs2, axis = 1).reshape(n, 1), np.ones((1, 2)))
-xs1[:,0] *= 5
-xs2[:,1] *= 5
-b1 = np.ones(n)/n
-b2 = b1.copy()
-(ys, weights) = barycenter_free(b1, b2, xs1, xs2, lambd, k)
-pl.plot(xs1[:,0], xs1[:,1], 'xb')
-pl.plot(xs2[:,0], xs2[:,1], 'xr')
-pl.plot(ys[:,0], ys[:,1], 'xg')
-pl.show()
+# lambd = 0.1
+# cov1 = np.array([[1, 0], [0, 1]])
+# cov2 = np.array([[1, 0], [0, 1]])
+# mu1 = np.zeros(2)
+# mu2 = np.zeros(2)
+# n = 400
+# k = 100
+# xs1 = ot.datasets.get_2D_samples_gauss(n, mu1, cov1)
+# xs2 = ot.datasets.get_2D_samples_gauss(n, mu2, cov2)
+# xs1 /= np.dot(np.linalg.norm(xs1, axis = 1).reshape(n, 1), np.ones((1, 2)))
+# xs2 /= np.dot(np.linalg.norm(xs2, axis = 1).reshape(n, 1), np.ones((1, 2)))
+# xs1[:,0] *= 5
+# xs2[:,1] *= 5
+# b1 = np.ones(n)/n
+# b2 = b1.copy()
+# (ys, weights, cost) = barycenter_free(b1, b2, xs1, xs2, 0.1, 0.9, lambd, k)
+# print("Cost = {}".format(cost))
+# pl.plot(xs1[:,0], xs1[:,1], 'xb')
+# pl.plot(xs2[:,0], xs2[:,1], 'xr')
+# pl.plot(ys[:,0], ys[:,1], 'xg')
+# pl.show()
+
+#%% Test run
+
+#%% parameters and data generation
+n_source = 40 # nb samples
+n_target = 30 # nb samples
+
+mu_source = np.array([[0, 0], [0, 5]])
+cov_source = np.array([[1, 0], [0, 1]])
+
+mu_target = np.array([[10, 1], [10, 5], [10, 10]])
+cov_target = np.array([[1, 0], [0, 1]])
+
+num_clust_source = mu_source.shape[0]
+num_clust_target = mu_target.shape[0]
+
+xs = np.vstack([ot.datasets.get_2D_samples_gauss(np.floor(n_source/num_clust_source).astype(int),  mu_source[i,:], cov_source) for i in range(num_clust_source)])
+xt = np.vstack([ot.datasets.get_2D_samples_gauss(np.floor(n_target/num_clust_target).astype(int),  mu_target[i,:], cov_target) for i in range(num_clust_target)])
+
+ind_clust_source = np.vstack([i*np.ones(n_source/num_clust_source) for i in range(num_clust_source)])
+ind_clust_target = np.vstack([i*np.ones(n_target/num_clust_target) for i in range(num_clust_target)])
+
+#%% individual OT
+
+# uniform distribution on samples
+n1 = len(xs)
+n2 = len(xt)
+a, b = np.ones((n1,)) / n1, np.ones((n2,)) / n2 
+
+# loss matrix
+M = ot.dist(xs, xt)
+M /= M.max()
+
+#OT
+#G_ind = ot.emd(a, b, M)
+lambd = 1e-3
+G_ind = ot.sinkhorn(a, b, M, lambd)
+
+## plot OT transformation for samples
+#ot.plot.plot2D_samples_mat(xs, xt, G_ind, c=[.5, .5, 1])
+#pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+#pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+#pl.legend(loc=0)
+#pl.title('OT matrix with samples')
+
+#%% clustered OT
+
+#find CM of clusters
+kmeans = KMeans(n_clusters=num_clust_source, random_state=0).fit(xs)
+CM_source = kmeans.cluster_centers_
+kmeans = KMeans(n_clusters=num_clust_target, random_state=0).fit(xt)
+CM_target = kmeans.cluster_centers_
+
+# loss matrix
+M_clust = ot.dist(CM_source, CM_target)
+M_clust /= M_clust.max()
+
+# uniform distribution on CMs
+n1_clust = len(CM_source)
+n2_clust = len(CM_target)
+a_clust, b_clust = np.ones((n1_clust,)) / n1_clust, np.ones((n2_clust,)) / n2_clust # uniform distribution on samples
+
+#OT
+G_clust = ot.emd(a_clust, b_clust, M_clust)
+
+## plot OT transformation for CMs
+#ot.plot.plot2D_samples_mat(CM_source, CM_target, G_clust, c=[.5, .5, 1])
+#pl.plot(CM_source[:, 0], CM_source[:, 1], 'ok', markersize=10,fillstyle='full')
+#pl.plot(CM_target[:, 0], CM_target[:, 1], 'ok', markersize=10,fillstyle='full')
+#pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+#pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+#pl.legend(loc=0)
+#pl.title('OT matrix with samples, CM')
+
+#%% OT figures
+f, axs = pl.subplots(1,2,figsize=(10,4))
+
+sub=pl.subplot(131)
+ot.plot.plot2D_samples_mat(xs, xt, G_ind, c=[.5, .5, 1])
+pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+pl.legend(loc=0)
+sub.set_title('OT by samples')
+
+sub=pl.subplot(132)
+ot.plot.plot2D_samples_mat(CM_source, CM_target, G_clust, c=[.5, .5, 1])
+pl.plot(CM_source[:, 0], CM_source[:, 1], 'ok', markersize=10,fillstyle='full')
+pl.plot(CM_target[:, 0], CM_target[:, 1], 'ok', markersize=10,fillstyle='full')
+pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+pl.legend(loc=0)
+sub.set_title('OT by CMs')
+
+# uniform distribution on samples
+n1 = len(xs)
+n2 = len(xt)
+b1, b2 = np.ones((n1,)) / n1, np.ones((n2,)) / n2 
+
+(zs1, zs2, a1, a2, mid_left_source, mid_right_mid_left, mid_right_target) = cluster_ot(b1, b2, xs, xt, 2, 3, 1.0, 1.0, 1, verbose = True)
+
+sub = pl.subplot(133)
+pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
+pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
+ot.plot.plot2D_samples_mat(zs1, xs, mid_left_source, c=[.5, .5, 1])
+ot.plot.plot2D_samples_mat(zs2, zs1, mid_right_mid_left, c=[.5, .5, .5])
+ot.plot.plot2D_samples_mat(zs2, xt, mid_right_target, c=[1, .5, .5])
+pl.legend(loc=0)
+sub.set_title("OT, regularized")
