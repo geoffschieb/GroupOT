@@ -376,27 +376,29 @@ b1, b2 = np.ones((n1,)) / n1, np.ones((n2,)) / n2
 # t0 = time.time()
 # (zs1, zs2, a1, a2, mid_left_source, mid_right_mid_left, mid_right_target) = cluster_ot(b1, b2, xs, xt, 2, 3, 1.0, 1.0, 1, verbose = True)
 # print("Time: {}".format(time.time() - t0))
-# t0 = time.time()
-# (zs1, zs2, a1, a2, gammas) = cluster_ot(b1, b2, xs, xt, 3, 3, [1.0, 1.0, 1.0], 1.0, verbose = True)
-# print("Time: {}".format(time.time() - t0))
-
 t0 = time.time()
-(zs1, zs2, a, gammas) = cluster_ot_map(b1, b2, xs, xt, 3, [0.5, 1.0, 0.5], 1.0, verbose = True, tol = 1e-5)
+(zs1, zs2, a1, a2, gammas) = cluster_ot(b1, b2, xs, xt, 3, 3, [10.0, 1.0, 10.0], 1.0, verbose = True)
 print("Time: {}".format(time.time() - t0))
+
+# t0 = time.time()
+# (zs1, zs2, a, gammas) = cluster_ot_map(b1, b2, xs, xt, 3, [10, 1.0, 10], 1.0, verbose = True, tol = 1e-5)
+# print("Time: {}".format(time.time() - t0))
 
 # sub = pl.subplot(133)
 pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
 pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
 pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
 pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
-ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
-ot.plot.plot2D_samples_mat(zs1, zs2, np.diag(np.sum(gammas[0], axis = 0)), c=[.5, .5, .5])
-ot.plot.plot2D_samples_mat(zs2, xt, gammas[1], c=[1, .5, .5])
 # ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
-# ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
-# ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
+# ot.plot.plot2D_samples_mat(zs1, zs2, np.diag(np.sum(gammas[0], axis = 0)), c=[.5, .5, .5])
+# ot.plot.plot2D_samples_mat(zs2, xt, gammas[1], c=[1, .5, .5])
+ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
+ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
+ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
 pl.legend(loc=0)
-sub.set_title("OT, regularized")
+#pl.set_title("OT, regularized")
+
+pl.show()
 
 # #%% Test new barycenter
 
