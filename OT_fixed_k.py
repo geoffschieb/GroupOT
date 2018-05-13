@@ -205,6 +205,68 @@ def cluster_ot(b1, b2, xs, xt, k1, k2,
     else:
         return (zs1, zs2, np.sum(gammas[1], axis = 1), np.sum(gammas[1], axis = 0), gammas)
 
+def constraint_ot(b1, lb, M, entr_reg,
+        tol = 1e-4,
+        max_iter = 1000):
+    converged = False
+    its = 0
+
+    # K = exp(-M/entr_reg)
+    # u = np.ones(K.shape[0])
+    # v = np.ones(K.shape[1])
+    # gamma1 = K.copy()
+    gamma1 = np.exp(-M/entr_reg)
+    # gamma2 = gamma.copy()
+    q1 = np.ones(gamma1.shape)
+    q2 = np.ones(gamma1.shape)
+
+    while not converged:
+        its += 1
+        arg = gamma1 * q1
+        # arg = np.exp(np.log(gamma1) + np.log(q1))
+        # mult = np.exp(np.log(b1) - np.log(np.sum(arg, axis = 1)))
+        mult = b1 / np.sum(arg, axis = 1)
+        gamma2 = mult.reshape(-1, 1) * arg
+        # gamma2 = np.exp(np.log(mult.reshape(-1, 1)) + np.log(arg))
+        # print("gamma2", gamma2)
+        q1 *= gamma1/gamma2
+        # q1 = np.exp(np.log(q1) - np.log(gamma2) + np.log(gamma1))
+        # print("q1", q1)
+
+        arg = gamma2 * q2
+        # arg = np.exp(np.log(gamma2) + np.log(q2))
+        mult = lb / np.sum(arg, axis = 0)
+        # mult = np.exp(np.log(lb) - np.log(np.sum(arg, axis = 0)))
+        mult[mult < 1] = 1
+        # print(mult.shape)
+        # print(arg.shape)
+        # print(1, np.log(arg))
+        # print(2, np.log(mult))
+        # print(3, np.log(mult.reshape(1, -1)) + np.log(arg))
+        gamma1 = mult.reshape(1, -1) * arg
+        # gamma1 = np.exp(np.log(mult.reshape(1, -1)) + np.log(arg))
+        # print("gamma1", gamma1)
+        q2 *= gamma2 / gamma1
+        # q2 = np.exp(np.log(q2) + np.log(gamma2) - np.log(gamma1))
+        # print("q2", q2)
+
+        err = np.linalg.norm(gamma1 - gamma2, "fro")/max(np.linalg.norm(gamma1, "fro"), 1e-12)
+        print(its, err)
+        if err < tol or its > max_iter:
+            converged = True
+
+    return gamma2
+
+def test_constraint_ot():
+    global xs, ys
+    xs = np.vstack([range(4), np.zeros(4)]).T
+    ys = np.vstack([range(4), np.ones(4)]).T
+    M = ot.dist(xs, ys)
+    a = np.array([0.4, 0.4, 0.1, 0.1])
+    lb = 0.2
+    gamma = constraint_ot(a, lb, M, 1e0, max_iter = 1000)
+    print(np.sum(gamma, axis = 0))
+
 def update_points_barycenter(xs, xt, zs, gammas, lambdas,
         verbose = False):
 
@@ -331,7 +393,8 @@ def nearest_points_reg(a, M, entr_reg):
     return np.divide(a, np.sum(K, axis = 1)).reshape(-1, 1) * K
 
 def reweighted_clusters(xs, xt, k, lambdas, entr_reg,
-        tol = 1e-10):
+        tol = 1e-10,
+        lb = 0):
     converged = False
 
     d = xs.shape[1]
@@ -350,8 +413,12 @@ def reweighted_clusters(xs, xt, k, lambdas, entr_reg,
         Ms = [ot.dist(xs, zs1), ot.dist(zs1, zs2), ot.dist(zs2, xt)]
         # gamma_left = nearest_points(Ms[0])
         # gamma_right = nearest_points(Ms[2].T).T
-        gamma_left = nearest_points_reg(np.ones(Ms[0].shape[0])/Ms[0].shape[0], Ms[0], entr_reg)
-        gamma_right = nearest_points_reg(np.ones(Ms[2].shape[1])/Ms[2].shape[1], Ms[2].T, entr_reg).T
+        if lb == 0:
+            gamma_left = nearest_points_reg(np.ones(Ms[0].shape[0])/Ms[0].shape[0], Ms[0], entr_reg)
+            gamma_right = nearest_points_reg(np.ones(Ms[2].shape[1])/Ms[2].shape[1], Ms[2].T, entr_reg).T
+        else:
+            gamma_left = constraint_ot(np.ones(Ms[0].shape[0])/Ms[0].shape[0], lb, Ms[0], entr_reg)
+            gamma_right = constraint_ot(np.ones(Ms[2].shape[1])/Ms[2].shape[1], lb, Ms[2].T, entr_reg).T
         gamma_middle = ot.sinkhorn(unif, unif, Ms[1], entr_reg)
         gammas = [gamma_left, gamma_middle, gamma_right]
 
@@ -365,6 +432,41 @@ def reweighted_clusters(xs, xt, k, lambdas, entr_reg,
         cost_old = cost
 
     return (zs1, zs2, gammas)
+
+def kmeans_transport(xs, xt, k, entr_reg):
+    clust_sources = KMeans(n_clusters = k).fit(xs)
+    clust_targets = KMeans(n_clusters = k).fit(xt)
+    zs1 = clust_sources.cluster_centers_
+    zs2 = clust_targets.cluster_centers_
+    a = np.zeros(zs1.shape[0])
+    b = np.zeros(zs2.shape[0])
+
+    for i in range(a.shape[0]):
+        a[i] += np.sum(clust_sources.labels_ == i)
+    a /= xs.shape[0]
+    for i in range(b.shape[0]):
+        b[i] += np.sum(clust_targets.labels_ == i)
+    b /= xt.shape[0]
+    # gamma_clust = ot.sinkhorn(a, b, ot.dist(zs1, zs2), entr_reg)
+    gamma_clust = ot.emd(a, b, ot.dist(zs1, zs2))
+    gamma_source = np.zeros((xs.shape[0], zs1.shape[0]))
+    gamma_source[range(gamma_source.shape[0]), clust_sources.labels_] = 1
+    gamma_source /= gamma_source.shape[0]
+    gamma_target = np.zeros((xt.shape[0], zs2.shape[0]))
+    gamma_target[range(gamma_target.shape[0]), clust_targets.labels_] = 1
+    gamma_target /= gamma_target.shape[0]
+    return np.dot(np.dot(gamma_source, gamma_clust), gamma_target.T)
+
+def bary_map(gamma, xs):
+    # print(np.sum(gamma, axis = 0).shape)
+    # print(gamma.T.shape)
+    return np.dot(gamma.T / np.sum(gamma, axis = 0).reshape(-1, 1), xs)
+
+def classify_1nn(xs, xt, labs):
+    # print(np.argmin(ot.dist(xt, xs), axis = 1).shape)
+    return labs[np.argmin(ot.dist(xt, xs), axis = 1)]
+
+#%% Estimation/rounding functions
 
 def estimate_w2_cluster(xs, xt, gammas, b0 = None):
     if b0 is None:
@@ -389,10 +491,24 @@ def estimate_w2_cluster(xs, xt, gammas, b0 = None):
     # total_cost = np.sum((gammas[0] * costs))
     return total_cost
 
-def classify_ot(G, labs_ind):
+def calc_lab_ind(lab):
+    lab_ind = [np.where(lab == i)[0] for i in np.sort(np.unique(lab))]
+    return lab_ind
+
+def classify_ot(G, labs_ind, labs = None):
     odds = np.vstack([np.sum(G[labs_ind[i], :], axis = 0) for i in range(len(labs_ind))]).T
-    labt_pred = np.argmax(odds, axis = 1) + 1
+    if labs is None:
+        labt_pred = np.argmax(odds, axis = 1)
+    else:
+        lab_nums = np.sort(np.unique(labs))
+        labt_pred = lab_nums[np.argmax(odds, axis = 1)]
     return labt_pred
+
+def total_gamma(gammas):
+    if len(gammas) == 3:
+        return np.dot(np.dot(gammas[0], gammas[1]), gammas[2])
+    else:
+        return np.dot(gammas[0], gammas[1])
 
 def classify_cluster_ot(gammas, labs_ind):
     total_gamma = np.dot(np.dot(gammas[0], gammas[1]), gammas[2])
@@ -404,6 +520,14 @@ def classify_kbary(gammas, labs_ind):
     total_gamma /= np.sum(total_gamma, axis = 0).reshape(1, -1)
     return classify_ot(total_gamma, labs_ind)
     
+def class_err(labt, labt_pred, labt_ind = None):
+    if labt_ind is None:
+        labt_ind = calc_lab_ind(labt)
+    ret = np.zeros((len(labt_ind), 2))
+    for i in range(ret.shape[0]):
+        ret[i, 0] = np.mean(labt_pred[labt_ind[i]] == labt[labt_ind[i]])
+        ret[i, 1] = np.mean(labt_pred[labt_ind[i]] != labt[labt_ind[i]])
+    return ret
 
 # def bootstrap_param(eval_proc, params, data, coverage, its):
 #     gt = eval_proc(data, params[-1])
@@ -467,14 +591,18 @@ def test_split_data_uniform():
     cost = ot.sinkhorn2(b1, b2, ot.dist(samples_source, samples_target), 1)
     print("Sinkhorn: {}".format(cost))
 
-    (zs1, zs2, a1, a2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, 8, 8, [1.0, 1.0, 1.0], 1, verbose = True)
-    # (zs1, zs2, a1, a2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, 8, 8, [1.0, 1.0, 1.0], 1, verbose = True, relax_outside = [1e4, 1e4])
-    # (zs1, zs2, gammas) = reweighted_clusters(samples_source, samples_target, 8, [1.0, 1.0, 1.0], 1e0)
+    # (zs1, zs2, a1, a2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, 8, 8, [1.0, 1.0, 1.0], 1, verbose = True)
+    # (zs1, zs2, a1, a2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, 3, 3, [1.0, 1.0, 1.0], 1, verbose = True, relax_outside = [1e+5, 1e+5])
+    # (zs1, zs2, a1, a2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, 8, 8, [1.0, 1.0, 1.0], 1, verbose = True, relax_inside = [1e0, 1e0])
+    (zs1, zs2, gammas) = reweighted_clusters(samples_source, samples_target, 8, [1.0, 0.5, 1.0], 5e-1, lb = float(1)/10)
     cluster_cost = estimate_w2_cluster(samples_source, samples_target, gammas)
     print("Cluster cost: {}".format(cluster_cost))
 
     xs = samples_source
     xt = samples_target
+
+    print(zs1)
+    print(zs2)
 
     # hubOT plot
     pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
@@ -499,9 +627,127 @@ def test_split_data_uniform():
     # ot.plot.plot2D_samples_mat(zs, xt, gammas[1], c=[.5, .5, .5])
     # pl.show()
 
+def gen_rot2d(deg):
+    phi = deg/360*2*np.pi
+    return np.array([[np.cos(phi), -np.sin(phi)], [np.sin(phi), np.cos(phi)]])
+
+def gen_moons(n_each, y_shift = 0.75, x_shift = 1, radius = 2, noise = 0):
+    X = np.zeros((2*n_each, 2))
+    for i in range(2):
+        angles = np.random.uniform(high = np.pi, size = n_each)
+        X[(i * n_each):((i+1)*n_each),:] = radius * np.vstack((np.cos(angles), (1 - 2*i) * np.sin(angles))).T - (1 - 2*i) * np.array([x_shift, y_shift])
+
+    X += np.random.normal(0, noise, size = X.shape)
+    y = np.hstack((np.zeros(n_each), np.ones(n_each))).T.astype(int)
+    return (X, y)
+
+def test_moons():
+    global gamma_ot, labs, labt, labt_pred, gammas_k, zs
+    samples = 10
+    noise = 0.05
+    d = 2
+    k = 10
+    angle = 30
+    ns = 300
+    nt = 300
+
+    err_mat_ot = np.zeros((2,2))
+    err_mat_hot = np.zeros((2,2))
+    err_mat_gl = np.zeros((2,2))
+    err_mat_km = np.zeros((2,2))
+    err_mat_kb = np.zeros((2,2))
+
+    for sample in range(samples):
+        # Generate two moon samples
+        (xs, labs) = gen_moons(int(ns/2), noise = 0)
+        (xt, labt) = gen_moons(int(nt/2), noise = 0)
+        # Rotate target samples
+        rho = gen_rot2d(angle)
+        xt = np.dot(xt, rho.T)
+
+        # Embed in higher dim
+        if d > 2:
+            proj = np.random.normal(size = (2, d))
+        else:
+            proj = np.eye(d)
+        xs = np.dot(xs, proj) + noise * np.random.normal(size = (ns, d))
+        xt = np.dot(xt, proj) + noise * np.random.normal(size = (nt, d))
+
+        labs_ind =  calc_lab_ind(labs)
+
+        # Compute OT mapping
+        gamma_ot = ot.da.EMDTransport().fit(Xs = xs, Xt = xt).coupling_
+        # labt_pred = classify_ot(gamma_ot, labs_ind, labs)
+        labt_pred = classify_1nn(xs, bary_map(gamma_ot, xs), labs)
+        err_mat_ot += class_err(labt, labt_pred)
+
+        # k means + OT
+        gamma_km = kmeans_transport(xs, xt, k, 1e1)
+        # labt_pred_km = classify_ot(gamma_km, labs_ind, labs)
+        labt_pred_km = classify_1nn(xs, bary_map(gamma_km, xs), labs)
+        err_mat_km += class_err(labt, labt_pred_km)
+
+        # Compute hub OT
+        a = np.ones(ns)/ns
+        b = np.ones(nt)/nt
+        (zs1, zs2, a1, a2, gammas_k) = cluster_ot(a, b, xs, xt, k, k, [1.0, 1.0, 1.0], 1e-2, relax_outside = [np.inf, np.inf], warm_start = False)
+        # labt_pred_hot = classify_cluster_ot(gammas_k, labs_ind)
+        labt_pred_hot = classify_1nn(xs, bary_map(total_gamma(gammas_k), xs), labs)
+        err_mat_hot += class_err(labt, labt_pred_hot)
+
+        # k barycenter OT
+        (zs, gammas) = kbarycenter(a, b, xs, xt, k, [1.0, 1.0], 1e-3, warm_start = True, max_iter = 100)
+        # labt_pred_kb = classify_kbary(gammas, labs_ind)
+        labt_pred_kb = classify_1nn(xs, bary_map(total_gamma(gammas), xs), labs)
+        err_mat_kb += class_err(labt, labt_pred_kb)
+
+        # Compute group lasso regularized OT
+        # gamma_gl = ot.da.SinkhornLpl1Transport(reg_e=1e2, reg_cl=1e0).fit(Xs = xs, ys = labs, Xt = xt).coupling_
+        gamma_gl = ot.da.SinkhornL1l2Transport(reg_e=1e-1, reg_cl=1e-0).fit(Xs = xs, ys = labs, Xt = xt).coupling_
+        # labt_pred_gl = classify_ot(gamma_gl, labs_ind, labs)
+        labt_pred_gl = classify_1nn(xs, bary_map(gamma_gl, xs), labs)
+        err_mat_gl += class_err(labt, labt_pred_gl)
+
+    err_mat_ot /= samples
+    err_mat_hot /= samples
+    err_mat_km /= samples
+    err_mat_kb /= samples
+    err_mat_gl /= samples
+    print(err_mat_ot)
+    print(err_mat_gl)
+    print(err_mat_km)
+    print(err_mat_kb)
+    print(err_mat_hot)
+
+    # # Plot points
+    # pl.scatter(*xs.T)
+    # pl.scatter(*xt.T)
+    # pl.axis("equal")
+    # pl.show()
+
+#     # hubOT plot
+#     pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+#     pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+#     pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
+#     pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
+#     ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
+#     ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
+#     ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
+#     pl.show()
+
+#     # k bary plot
+#     pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+#     pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+#     pl.plot(zs[:, 0], zs[:, 1], '<c', label='Mid 1')
+#     ot.plot.plot2D_samples_mat(xs, zs, gammas[0], c=[.5, .5, 1])
+#     ot.plot.plot2D_samples_mat(zs, xt, gammas[1], c=[.5, .5, .5])
+#     pl.show()
+
 if __name__ == "__main__":
     # test_split_data_gaussian()
-    test_split_data_uniform()
+    # test_split_data_uniform()
+    # test_constraint_ot()
+    test_moons()
 
 
     ### Barycenter histogram test
@@ -595,8 +841,8 @@ if __name__ == "__main__":
     xs = np.vstack([ot.datasets.get_2D_samples_gauss(np.floor(weights[i] * n_source/num_clust_source).astype(int),  mu_source[i,:], cov_source) for i in range(num_clust_source)])
     xt = np.vstack([ot.datasets.get_2D_samples_gauss(np.floor(weights[1-i] * n_target/num_clust_target).astype(int),  mu_target[i,:], cov_target) for i in range(num_clust_target)])
 
-    ind_clust_source = np.vstack([i*np.ones(n_source/num_clust_source) for i in range(num_clust_source)])
-    ind_clust_target = np.vstack([i*np.ones(n_target/num_clust_target) for i in range(num_clust_target)])
+    ind_clust_source = np.vstack([i*np.ones(int(n_source/num_clust_source)) for i in range(num_clust_source)])
+    ind_clust_target = np.vstack([i*np.ones(int(n_target/num_clust_target)) for i in range(num_clust_target)])
 
     #%% individual OT
 

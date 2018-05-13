@@ -104,13 +104,6 @@ G0 = ot.emd(a, b, M)
 #lambd = 1e-3
 #G0 = ot.sinkhorn(a, b, M, lambd)
 
-def class_err(labt, labt_pred, labt_ind):
-    ret = np.zeros((len(labt_ind), 2))
-    for i in range(1, ret.shape[0] + 1):
-        ret[i-1, 0] = np.mean(labt_pred[labt_ind[i-1]] == labt[labt_ind[i-1]])
-        ret[i-1, 1] = np.mean(labt_pred[labt_ind[i-1]] != labt[labt_ind[i-1]])
-    return ret
-
 labt_pred = hot.classify_ot(G0, labs_ind)
 
 
@@ -121,7 +114,7 @@ for i in range(1,4):
 
 # print(mat_results)
 
-class_ot = class_err(labt, labt_pred, labt_ind)
+class_ot = hot.class_err(labt, labt_pred, labt_ind)
 print(class_ot)
 
 # mutual nearest neighbors
@@ -148,7 +141,7 @@ mat_results_mnn = np.zeros((3,2))
 
 
 # print(mat_results_mnn)
-class_mnn = class_err(labt, labt_pred_mnn, labt_ind)
+class_mnn = hot.class_err(labt, labt_pred_mnn, labt_ind)
 print(class_mnn)
 
 # correlation + majority vote
@@ -166,7 +159,7 @@ class_mm = np.zeros((3,2))
     # mat_results_mm[i-1,1] = (1/len(np.where(labs==i)[0]))*((np.sum(G_mm[np.where(labs==i)[0][:, None],np.where(labt!=i)[0]]))/(np.sum(G_mm[np.where(labs==i)[0][:, None],:])))/(len(np.where(labt!=i)[0])/len(labt))
 
 # print(mat_results_mm)
-class_mm = class_err(labt, labt_pred_mm, labt_ind)
+class_mm = hot.class_err(labt, labt_pred_mm, labt_ind)
 print(class_mm)
 
 # hub OT
@@ -175,7 +168,7 @@ k = 10
 # (zs1, zs2, a1, a2, gammas, zs1_l, zs2_l) = hot.cluster_ot(a, b, datas, datat, k, k, [1.0, 1.0, 1.0], 1e1, debug = True, relax_inside = [1e4, 1e4], warm_start = True)
 # (zs1, zs2, a1, a2, gammas, zs1_l, zs2_l) = hot.cluster_ot(a, b, datas, datat, k, k, [1.0, 1.0, 1.0], 1e1, debug = True, relax_outside = [np.inf, np.inf], warm_start = True)
 labt_pred_cluster_ot = hot.classify_cluster_ot(gammas, labs_ind)
-class_cluster_ot = class_err(labt, labt_pred_cluster_ot, labt_ind)
+class_cluster_ot = hot.class_err(labt, labt_pred_cluster_ot, labt_ind)
 print(class_cluster_ot)
 emb_dat = decomposition.PCA(n_components=2).fit_transform(np.vstack([datas, datat, zs1_l[1], zs2_l[1]]))
 
@@ -215,7 +208,7 @@ pl.show()
 # # (zs1, zs2, a1, a2, gammas, zs1_l, zs2_l) = hot.cluster_ot(a, b, datas, datat, k, k, [1.0, 1.0, 1.0], 1e1, debug = True, relax_inside = [1e4, 1e4], warm_start = True)
 # # (zs1, zs2, a1, a2, gammas, zs1_l, zs2_l) = hot.cluster_ot(a, b, datas, datat, k, k, [1.0, 1.0, 1.0], 1e1, debug = True, relax_outside = [np.inf, np.inf], warm_start = True)
 # labt_pred_kbary = hot.classify_kbary(gammas, labs_ind)
-# class_cluster_ot = class_err(labt, labt_pred_kbary, labt_ind)
+# class_cluster_ot = hot.class_err(labt, labt_pred_kbary, labt_ind)
 # print(class_cluster_ot)
 
 # ##% plot k barycenter
@@ -246,7 +239,7 @@ pl.show()
 # (zs1, zs2, gammas) = hot.reweighted_clusters(datas, datat, k, [1.0, 1.0, 1.0], 1e2)
 
 # labt_pred_cluster_ot = hot.classify_cluster_ot(gammas, labs_ind)
-# class_cluster_ot = class_err(labt, labt_pred_cluster_ot, labt_ind)
+# class_cluster_ot = hot.class_err(labt, labt_pred_cluster_ot, labt_ind)
 # print(class_cluster_ot)
 # # emb_dat = decomposition.PCA(n_components=2).fit_transform(np.vstack([datas, datat, zs1_l[1], zs2_l[1]]))
 
