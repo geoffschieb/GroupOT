@@ -133,6 +133,8 @@ def barycenter_bregman_chain(b_left, b_right, Ms, lambdas, entr_reg_final,
     except RuntimeWarning:
         print("Warning issued!")
         return None
+    finally:
+        warnings.filterwarnings("default")
 
     gammas = [us[i][0].reshape(-1, 1) * Ks[i] * us[i][1].reshape(1, -1) for i in range(len(us))]
     return gammas
@@ -164,6 +166,10 @@ def update_points(xs, xt, zs1, zs2, gammas, lambdas,
             # print("Total inner iterations: {}".format(its))
 
     return (zs1, zs2)
+
+def plot_transport_map(xs, xt):
+    for i in range(xs.shape[0]):
+        pl.plot([xs[i, 0], xt[i, 0]], [xs[i, 1], xt[i, 1]], 'k', alpha = 0.5)
 
 
 def cluster_ot(b1, b2, xs, xt, k1, k2,
@@ -545,9 +551,10 @@ def map_from_clusters(xs, xt, gammas):
     (centers1, centers2) = find_centers(xs, xt, gammas)
     if len(gammas) == 3:
         offsets = np.dot((gammas[1]/np.sum(gammas[1], axis = 0)).T, centers1) - centers2
-        return xt + np.dot((gammas[2]/np.sum(gammas[2], axis = 1).reshape(-1, 1)).T, offsets)
+        return xt + np.dot((gammas[2]/np.sum(gammas[2], axis = 0)).T, offsets)
     else:
-        error("Not implemented yet!")
+        offsets = centers1 - centers2
+        return xt + np.dot((gammas[1]/np.sum(gammas[1], axis = 0)).T, offsets)
 
 def classify_1nn(xs, xt, labs):
     # print(np.argmin(ot.dist(xt, xs), axis = 1).shape)
@@ -665,15 +672,15 @@ def test_split_data_gaussian():
     gamma_ot = ot.sinkhorn(b1, b2, ot.dist(samples_source, samples_target))
 
 def test_split_data_uniform():
-    global gammas, zs1, zs2
+    global gammas, zs1, zs2, centers1
 
     def transport_map(x, length = 1):
         direction = np.zeros_like(x)
         direction[0:2] = np.sign(x[0:2])
         return x + length * direction
 
-    d = 100
-    n = 1000
+    d = 2
+    n = 200
     samples_source = np.random.uniform(low=-1, high=1, size=(n, d))
     samples_target = np.random.uniform(low=-1, high=1, size=(n, d))
     samples_target = np.apply_along_axis(lambda x: transport_map(x, 2), 1, samples_target)
@@ -688,10 +695,10 @@ def test_split_data_uniform():
     cost = ot.sinkhorn2(b1, b2, ot.dist(samples_source, samples_target), 1)
     print("Sinkhorn: {}".format(cost))
 
-    ks = range(1, 100)
-    results = estimate_distances(b1, b2, samples_source, samples_target, ks, 1)
-    pl.plot(ks, results)
-    (zs1, zs2, a1, a2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, 8, 8, [1.0, 1.0, 1.0], 1, verbose = True)
+    # ks = range(1, 100)
+    # results = estimate_distances(b1, b2, samples_source, samples_target, ks, 1)
+    # pl.plot(ks, results)
+    (zs1, zs2, a1, a2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, 8, 16, [1.0, 1.0, 1.0], 1, verbose = True)
     # (zs1, zs2, a1, a2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, 3, 3, [1.0, 1.0, 1.0], 1, verbose = True, relax_outside = [1e+5, 1e+5])
     # (zs1, zs2, a1, a2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, 8, 8, [1.0, 1.0, 1.0], 1, verbose = True, relax_inside = [1e0, 1e0])
     # (zs1, zs2, gammas) = reweighted_clusters(samples_source, samples_target, 8, [1.0, 0.5, 1.0], 5e-1, lb = float(1)/10)
@@ -704,28 +711,30 @@ def test_split_data_uniform():
     # print(zs1)
     # print(zs2)
 
-    # # hubOT plot
-    # pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
-    # pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
-    # pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
-    # pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
-    # ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
-    # ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
-    # ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
-    # pl.show()
+#     # hubOT plot
+#     pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+#     pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+#     pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
+#     pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
+#     ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
+#     ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
+#     ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
+#     # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
+#     pl.show()
 
-    # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True, relax_outside = [1e4, 1e4])
+    (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf])
     # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True)
-    # bary_cost = estimate_w2_cluster(samples_source, samples_target, gammas)
-    # print("Barycenter cost: {}".format(bary_cost))
+    bary_cost = estimate_w2_cluster(samples_source, samples_target, gammas)
+    print("Barycenter cost: {}".format(bary_cost))
 
-    # # Barycenter plot
-    # pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
-    # pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
-    # pl.plot(zs[:, 0], zs[:, 1], '<c', label='Mid')
+    # Barycenter plot
+    pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+    pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+    pl.plot(zs[:, 0], zs[:, 1], '<c', label='Mid')
     # ot.plot.plot2D_samples_mat(xs, zs, gammas[0], c=[.5, .5, 1])
     # ot.plot.plot2D_samples_mat(zs, xt, gammas[1], c=[.5, .5, .5])
-    # pl.show()
+    plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
+    pl.show()
 
 def gen_rot2d(deg):
     phi = deg/360*2*np.pi
@@ -741,21 +750,179 @@ def gen_moons(n_each, y_shift = 0.75, x_shift = 1, radius = 2, noise = 0):
     y = np.hstack((np.zeros(n_each), np.ones(n_each))).T.astype(int)
     return (X, y)
 
+def gen_moons_data(ns, nt, angle, d, noise, samples):
+    data = []
+    for sample in range(samples):
+        # Generate two moon samples
+        (xs, labs) = gen_moons(int(ns/2), noise = 0)
+        (xt, labt) = gen_moons(int(nt/2), noise = 0)
+        # Rotate target samples
+        rho = gen_rot2d(angle)
+        xt = np.dot(xt, rho.T)
+
+        # Embed in higher dim
+        if d > 2:
+            proj = np.random.normal(size = (2, d))
+        else:
+            proj = np.eye(d)
+        xs = np.dot(xs, proj) + noise * np.random.normal(size = (ns, d))
+        xt = np.dot(xt, proj) + noise * np.random.normal(size = (nt, d))
+
+        labs_ind =  calc_lab_ind(labs)
+        data.append((xs, xt, labs, labt, labs_ind))
+    return data
+
+def prep_synth_clustering_data(ns, nt, d, prop1, prop2):
+    # TODO
+    #%% synthetic biological data (for batch effect in single cell sequencing data)
+    proj_mat = np.random.normal(0,1,(2,num_dim)) # projection matrix from 2d to num_dim d
+    # rand_vec1 = np.random.normal(0,1,(num_dim,1)) # bias vector for first experiment
+    # rand_vec2 = np.random.normal(28,1,(num_dim,1)) # bias vector for second experiment
+    # rand_vec2 = np.random.normal(0,1,(num_dim,1)) # bias vector for second experiment
+    # batch_effect = np.random.normal(0, 1, (3, num_dim))
+
+    # parameters for mixture of gaussians representing low-d mixture of cell types
+    mu_s1 = np.array([0, 5])
+    cov_s1 = np.array([[1, 0], [0, 1]])
+    mu_s2 = np.array([5, 0])
+    cov_s2 = np.array([[1, 0], [0, 1]])
+    mu_s3 = np.array([5, 5])
+    cov_s3 = np.array([[1, 0], [0, 1]])
+
+    # sampling single cells for first experiment
+    xs1 = ot.datasets.get_2D_samples_gauss(int(ns*prop1[0]), mu_s1, cov_s1)
+    xs2 = ot.datasets.get_2D_samples_gauss(int(ns*prop1[1]), mu_s2, cov_s1)
+    xs3 = ot.datasets.get_2D_samples_gauss(int(ns*prop1[2]), mu_s3, cov_s1)
+    xs = np.vstack((xs1,xs2,xs3))
+    labs = np.hstack((np.ones(int(ns*0.2)),2*np.ones(int(ns*0.3)),3*np.ones(int(ns*0.5)))).astype(int) # cell type labels
+    # datas = np.dot(xs,proj_mat) + rand_vec1.T # single cell data 
+    datas = np.dot(xs,proj_mat) + np.random.normal(0, 1, (xs.shape[0], num_dim)) # single cell data 
+
+    # sampling single cells for second experiment
+    xt1 = ot.datasets.get_2D_samples_gauss(int(nt*0.05), mu_s1, cov_s1)
+    xt2 = ot.datasets.get_2D_samples_gauss(int(nt*0.65), mu_s2, cov_s1)
+    xt3 = ot.datasets.get_2D_samples_gauss(int(nt*0.3), mu_s3, cov_s1)
+    xt = np.vstack((xt1,xt2,xt3))
+    labt = np.hstack((np.ones(int(nt*0.05)),2*np.ones(int(nt*0.65)),3*np.ones(int(nt*0.3)))).astype(int) # cell type labels
+    # datat = np.dot(xt,proj_mat) + rand_vec2.T # single cell data 
+    datat = np.dot(xt,proj_mat) + np.random.normal(0, 1, (xt.shape[0], num_dim)) + np.random.normal(0, 1, (1, num_dim))# single cell data 
+    # for i in range(len(labt_ind)):
+    #     datat[labt_ind[i],:] += batch_effect[i,:]
+
+    (datas, datat, labs, labt) = conv.convert_data()
+    labs_ind = [np.where(labs == i)[0] for i in range(1, 4)]
+    labt_ind = [np.where(labt == i)[0] for i in range(1, 4)]
+    ns = 1000
+    nt = 1000
+
+def test_synth_clustering_data():
+    # TODO
+    # parameters and data generation
+    ns = 200 # number of samples in first experiment
+    nt = 160 # number of samples in second experiment
+    num_dim = 100 # number of dimensions of single cell data
+
+def prep_satija_data():
+    print("Loading Satija data")
+    full_data = np.loadtxt("satija_data.txt", skiprows = 1)
+    source_ind = np.where(full_data[:, 1] == 1)[0]
+    target_ind = np.where(full_data[:, 1] == 1)[0]
+    labs = full_data[source_ind, 0]
+    labt = full_data[target_ind, 1]
+    xs = full_data[source_ind, 2:]
+    xt = full_data[target_ind, 2:]
+
+    return (xs, xt, labs, labt)
+
+def subsample_data(xs, xt, labs, labt, nperclass, samples):
+    data = []
+    for sample in range(samples):
+        inds = []
+        indt = []
+        for c in np.unique(labs):
+            c_ind = np.argwhere(labs == c).ravel()
+            np.random.shuffle(c_ind)
+            inds.extend(c_ind[:min(nperclass, len(c_ind))])
+        for c in np.unique(labt):
+            c_ind = np.argwhere(labt == c).ravel()
+            np.random.shuffle(c_ind)
+            indt.extend(c_ind[:min(nperclass, len(c_ind))])
+
+        labs_ind = calc_lab_ind(labs[inds])
+        data.append((xs[inds,:], xt[indt,:], labs[inds], labt[indt], labs_ind))
+    return data
+
+def test_moons_kplot():
+    noise = 1
+    d = 100
+    # k = 10
+    angle = 40
+    ns = 600
+    nt = 600
+    samples = 10
+    ks = np.hstack([range(1,11), range(12,31,2), range(34, 71, 4)])
+    entr_reg = 10
+
+    data = gen_moons_data(ns, nt, angle, d, noise, samples)
+
+    # hubOT
+    def hot_eval(k):
+        print("Running hubOT for {}".format(k))
+        err = 0.0
+        w2_estimate = 0.0
+        for sample in range(samples):
+            print("Sample: {}".format(sample))
+            # Compute hub OT
+            (xs, xt, labs, labt, labs_ind) = data[sample]
+            a = np.ones(ns)/ns
+            b = np.ones(nt)/nt
+            hot_ret = cluster_ot(a, b, xs, xt, k, k, [1.0, 1.0, 1.0], entr_reg,
+                    relax_outside = [np.inf, np.inf],
+                    warm_start = False,
+                    inner_tol = 1e-4,
+                    tol = 1e-4,
+                    reduced_inner_tol = True,
+                    inner_tol_start = 1e0,
+                    max_iter = 300,
+                    verbose = False
+                    )
+            if hot_ret is None:
+                err += np.inf
+            else:
+                (zs1, zs2, a1, a2, gammas) = hot_ret
+                # labt_pred_hot = classify_cluster_ot(gammas_k, labs_ind)
+                labt_pred_hot = classify_1nn(xs, bary_map(total_gamma(gammas), xs), labs)
+                labt_pred_hot2 = classify_1nn(xs, map_from_clusters(xs, xt, gammas), labs)
+                # print(class_err_combined(labt, labt_pred_hot))
+                # print(class_err_combined(labt, labt_pred_hot2))
+                # print()
+                err += class_err_combined(labt, labt_pred_hot2)
+                w2_estimate += estimate_w2_cluster(xs, xt, gammas)
+
+        err /= samples
+        w2_estimate /= samples
+        return (err, w2_estimate)
+
+    errs = np.zeros(len(ks))
+    w2s = np.zeros(len(ks))
+
+    for (i, k) in enumerate(ks):
+        (err, w2) = hot_eval(k)
+        errs[i] = err
+        w2s[i] = w2
+
+    pl.subplot(211)
+    pl.plot(ks, errs)
+    pl.subplot(212)
+    pl.plot(ks, w2s)
+    pl.show()
+
 def test_moons():
-    global errror_dict
-
     entr_regs = np.array([10.0])**range(-3, 5)
-    gl_params = np.array([10.0])**range(-3, 5)
-    # ks = np.array(range(1, 50))
-    ks = (np.array([2])**range(1,9)).astype(int)
-    samples = 50
-    samples_grid = 50
-
-#     entr_regs = np.array([1e-3, 1e1])
-#     gl_params = np.array([1e-3, 1e1])
-#     ks = np.array([8, 10])
-#     samples = 2
-#     samples_grid = 2
+    gl_params = np.array([100.0])**range(-3, 5)
+    ks = np.array([2])**range(1, 8)
+    samples_test = 1
+    samples_train = 1
 
     noise = 1
     d = 100
@@ -773,41 +940,58 @@ def test_moons():
             "entr_regs": entr_regs,
             "gl_params": gl_params,
             "ks": ks,
-            "samples_test": samples,
-            "samples_train": samples_grid
+            "samples_test": samples_test,
+            "samples_train": samples_train,
+            "outfile": "two_moons_results.bin"
             }
 
-#     err_mat_ot = np.zeros((2,2))
-#     err_mat_hot = np.zeros((2,2))
-#     err_mat_hot2 = np.zeros((2,2))
-#     err_mat_gl = np.zeros((2,2))
-#     err_mat_km = np.zeros((2,2))
-#     err_mat_kb = np.zeros((2,2))
+    def gen_data():
+        train_data = gen_moons_data(ns, nt, angle, d, noise, samples_train)
+        test_data = gen_moons_data(ns, nt, angle, d, noise, samples_test)
 
-    def gen_data(samples):
-        data = []
-        for sample in range(samples):
-            # Generate two moon samples
-            (xs, labs) = gen_moons(int(ns/2), noise = 0)
-            (xt, labt) = gen_moons(int(nt/2), noise = 0)
-            # Rotate target samples
-            rho = gen_rot2d(angle)
-            xt = np.dot(xt, rho.T)
+        return (train_data, test_data)
 
-            # Embed in higher dim
-            if d > 2:
-                proj = np.random.normal(size = (2, d))
-            else:
-                proj = np.eye(d)
-            xs = np.dot(xs, proj) + noise * np.random.normal(size = (ns, d))
-            xt = np.dot(xt, proj) + noise * np.random.normal(size = (nt, d))
+    test_data(simulation_params, gen_data)
 
-            labs_ind =  calc_lab_ind(labs)
-            data.append((xs, xt, labs, labt, labs_ind))
-        return data
+def test_satija():
+    entr_regs = np.array([10.0])**range(-3, 5)
+    gl_params = np.array([100.0])**range(-3, 5)
+    ks = np.array([2])**range(1, 8)
+    samples_test = 10
+    samples_train = 10
 
-    train_data = gen_data(samples_grid)
-    test_data = gen_data(samples)
+    nperclass = 30
+
+    simulation_params = {
+            "nperclass": nperclass,
+
+            "entr_regs": entr_regs,
+            "gl_params": gl_params,
+            "ks": ks,
+            "samples_test": samples_test,
+            "samples_train": samples_train,
+            "outfile": "two_moons_results.bin"
+            }
+
+    def gen_data():
+        (xs, xt, labs, labt) = prep_satija_data()
+        print("Subsampling")
+        train_data = subsample_data(xs, xt, labs, labt, nperclass, samples_train)
+        test_data = subsample_data(xs, xt, labs, labt, nperclass, samples_test)
+
+        return (train_data, test_data)
+
+    test_data(simulation_params, gen_data)
+
+def test_data(sim_params, gen_data):
+    (train_data, test_data) = gen_data()
+    
+    # Extract data
+    entr_regs = sim_params["entr_regs"]
+    ks = sim_params["ks"]
+    gl_params = sim_params["gl_params"]
+    samples_test = sim_params["samples_test"]
+    samples_train = sim_params["samples_train"]
 
     def get_data(train, i):
         if train:
@@ -838,7 +1022,7 @@ def test_moons():
         print(err)
         return err
     
-    ot_params = opt_grid(ot_err, [samples_grid], [True])
+    ot_params = opt_grid(ot_err, [samples_train], [True])
 
     # k means + OT
     def kmeans_ot_err(params):
@@ -858,7 +1042,7 @@ def test_moons():
         print(err)
         return err
     
-    kmeans_ot_params = opt_grid(kmeans_ot_err, entr_regs, ks, [samples_grid], [True])
+    kmeans_ot_params = opt_grid(kmeans_ot_err, entr_regs, ks, [samples_train], [True])
 
     # hubOT
     def hot_err(params):
@@ -868,8 +1052,8 @@ def test_moons():
         for sample in range(samples):
             # Compute hub OT
             (xs, xt, labs, labt, labs_ind) = get_data(train, sample)
-            a = np.ones(ns)/ns
-            b = np.ones(nt)/nt
+            a = np.ones(xs.shape[0])/xs.shape[0]
+            b = np.ones(xt.shape[0])/xt.shape[0]
             hot_ret = cluster_ot(a, b, xs, xt, k, k, [1.0, 1.0, 1.0], entr_reg,
                     relax_outside = [np.inf, np.inf],
                     warm_start = False,
@@ -884,15 +1068,17 @@ def test_moons():
                 (zs1, zs2, a1, a2, gammas_k) = hot_ret
                 # labt_pred_hot = classify_cluster_ot(gammas_k, labs_ind)
                 labt_pred_hot = classify_1nn(xs, bary_map(total_gamma(gammas_k), xs), labs)
-                # labt_pred_hot2 = classify_1nn(xs, map_from_clusters(xs, xt, gammas_k), labs)
-                err += class_err_combined(labt, labt_pred_hot)
-                # err_mat_hot2 += class_err(labt, labt_pred_hot2)
+                labt_pred_hot2 = classify_1nn(xs, map_from_clusters(xs, xt, gammas_k), labs)
+                # print(class_err_combined(labt, labt_pred_hot))
+                # print(class_err_combined(labt, labt_pred_hot2))
+                # print()
+                err += class_err_combined(labt, labt_pred_hot2)
 
         err /= samples
         print(err)
         return err
     
-    hot_params = opt_grid(hot_err, entr_regs, ks, [samples_grid], [True])
+    hot_params = opt_grid(hot_err, entr_regs, ks, [samples_train], [True])
 
     # k barycenter
     def kbary_err(params):
@@ -902,8 +1088,8 @@ def test_moons():
         for sample in range(samples):
             # k barycenter OT
             (xs, xt, labs, labt, labs_ind) = get_data(train, sample)
-            a = np.ones(ns)/ns
-            b = np.ones(nt)/nt
+            a = np.ones(xs.shape[0])/xs.shape[0]
+            b = np.ones(xt.shape[0])/xt.shape[0]
             kbary_ret = kbarycenter(a, b, xs, xt, k, [1.0, 1.0], entr_reg, warm_start = False, max_iter = 300)
             if kbary_ret is None:
                 err += np.inf
@@ -911,13 +1097,17 @@ def test_moons():
                 (zs, gammas) = kbary_ret
                 # labt_pred_kb = classify_kbary(gammas, labs_ind)
                 labt_pred_kb = classify_1nn(xs, bary_map(total_gamma(gammas), xs), labs)
+                labt_pred_kb2 = classify_1nn(xs, map_from_clusters(xs, xt, gammas), labs)
+                # print(class_err_combined(labt, labt_pred_kb))
+                # print(class_err_combined(labt, labt_pred_kb2))
+                # print()
                 err += class_err_combined(labt, labt_pred_kb)
 
         err /= samples
         print(err)
         return err
     
-    kb_params = opt_grid(kbary_err, entr_regs, ks, [samples_grid], [True])
+    kb_params = opt_grid(kbary_err, entr_regs, ks, [samples_train], [True])
 
     # Group lasso
     def gl_ot_err(params):
@@ -941,8 +1131,8 @@ def test_moons():
         print(err)
         return err
     
-    gl_ot_params = opt_grid(gl_ot_err, entr_regs, gl_params, [samples_grid], [True])
-    params = {
+    gl_ot_params = opt_grid(gl_ot_err, entr_regs, gl_params, [samples_train], [True])
+    opt_params = {
             "ot": ot_params,
             "kmeans_ot": kmeans_ot_params,
             "hot": hot_params,
@@ -951,8 +1141,8 @@ def test_moons():
             }
 
     # Change to testing
-    for var in params.values():
-        var[-2] = samples
+    for var in opt_params.values():
+        var[-2] = samples_test
         var[-1] = False
 
     error_dict = {}
@@ -961,73 +1151,10 @@ def test_moons():
     error_dict["hot"] = hot_err(hot_params)
     error_dict["kbary"] = kbary_err(kb_params)
     error_dict["gl"] = gl_ot_err(gl_ot_params)
+    print(error_dict)
 
-    with open("two_moons_results.bin", 'wb') as outfile:
-        pickle.dump([simulation_params, params, error_dict], outfile)
-
-    # for sample in range(samples):
-    #     (xs, xt, labs, labt, labs_ind) = gen_data()
-
-    #     # Compute OT mapping
-    #     gamma_ot = ot.da.EMDTransport().fit(Xs = xs, Xt = xt).coupling_
-    #     # labt_pred = classify_ot(gamma_ot, labs_ind, labs)
-    #     labt_pred = classify_1nn(xs, bary_map(gamma_ot, xs), labs)
-    #     # labt_pred = classify_knn(xs, bary_map(gamma_ot, xs), labs, 50)
-    #     err_mat_ot += class_err(labt, labt_pred)
-
-    #     # k means + OT
-    #     gamma_km = kmeans_transport(xs, xt, k, 1e1)
-    #     # labt_pred_km = classify_ot(gamma_km, labs_ind, labs)
-    #     labt_pred_km = classify_1nn(xs, bary_map(gamma_km, xs), labs)
-    #     err_mat_km += class_err(labt, labt_pred_km)
-
-    #     # Compute hub OT
-    #     a = np.ones(ns)/ns
-    #     b = np.ones(nt)/nt
-    #     (zs1, zs2, a1, a2, gammas_k) = cluster_ot(a, b, xs, xt, k, k, [1.0, 1.0, 1.0], 1e1,
-    #             relax_outside = [np.inf, np.inf],
-    #             warm_start = True,
-    #             inner_tol = 5e-3,
-    #             reduced_inner_tol = True,
-    #             inner_tol_start = 1e0
-    #             )
-    #     # labt_pred_hot = classify_cluster_ot(gammas_k, labs_ind)
-    #     labt_pred_hot = classify_1nn(xs, bary_map(total_gamma(gammas_k), xs), labs)
-    #     labt_pred_hot2 = classify_1nn(xs, map_from_clusters(xs, xt, gammas_k), labs)
-    #     err_mat_hot += class_err(labt, labt_pred_hot)
-    #     err_mat_hot2 += class_err(labt, labt_pred_hot2)
-
-    #     # # k barycenter OT
-    #     # (zs, gammas) = kbarycenter(a, b, xs, xt, k, [1.0, 1.0], 1e-2, warm_start = True, max_iter = 100)
-    #     # # labt_pred_kb = classify_kbary(gammas, labs_ind)
-    #     # labt_pred_kb = classify_1nn(xs, bary_map(total_gamma(gammas), xs), labs)
-    #     # err_mat_kb += class_err(labt, labt_pred_kb)
-
-    #     # Compute group lasso regularized OT
-    #     # gamma_gl = ot.da.SinkhornLpl1Transport(reg_e=1e2, reg_cl=1e0).fit(Xs = xs, ys = labs, Xt = xt).coupling_
-    #     gamma_gl = ot.da.SinkhornL1l2Transport(reg_e=1e1, reg_cl=1e-0).fit(Xs = xs, ys = labs, Xt = xt).coupling_
-    #     # labt_pred_gl = classify_ot(gamma_gl, labs_ind, labs)
-    #     labt_pred_gl = classify_1nn(xs, bary_map(gamma_gl, xs), labs)
-    #     err_mat_gl += class_err(labt, labt_pred_gl)
-
-    # err_mat_ot /= samples
-    # err_mat_hot /= samples
-    # err_mat_hot2 /= samples
-    # err_mat_km /= samples
-    # err_mat_kb /= samples
-    # err_mat_gl /= samples
-    # print(err_mat_ot)
-    # print(err_mat_gl)
-    # print(err_mat_km)
-    # print(err_mat_kb)
-    # print(err_mat_hot)
-    # print(err_mat_hot2)
-
-    # # Plot points
-    # pl.scatter(*xs.T)
-    # pl.scatter(*xt.T)
-    # pl.axis("equal")
-    # pl.show()
+    with open(sim_params["outfile"], 'wb') as outfile:
+        pickle.dump([sim_params, opt_params, error_dict], outfile)
 
 def test_opt_grid():
     global ret, a, b
@@ -1059,10 +1186,12 @@ if __name__ == "__main__":
     # test_split_data_gaussian()
     # test_split_data_uniform()
     # test_constraint_ot()
-    t0 = time.time()
-    test_moons()
-    print("Time for moons: {}".format(time.time() - t0))
+    # t0 = time.time()
+    # test_moons()
+    # print("Time for moons: {}".format(time.time() - t0))
     # test_opt_grid()
+    # test_moons_kplot()
+    test_satija()
 
 
     ### Barycenter histogram test
