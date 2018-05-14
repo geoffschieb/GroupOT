@@ -746,7 +746,8 @@ def test_moons():
 
     entr_regs = np.array([10.0])**range(-3, 5)
     gl_params = np.array([10.0])**range(-3, 5)
-    ks = np.array(range(1, 50))
+    # ks = np.array(range(1, 50))
+    ks = (np.array([2])**range(1,9)).astype(int)
     samples = 50
     samples_grid = 50
 
