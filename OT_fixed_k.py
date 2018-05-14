@@ -805,7 +805,7 @@ def test_moons():
 
     # Entropically regularized OT
     def ot_err(params):
-        (entr_reg, samples, train) = params
+        (samples, train) = params
         print("Running OT for {}".format(params))
         err = 0.0
         for sample in range(samples):
@@ -824,7 +824,7 @@ def test_moons():
         print(err)
         return err
     
-    ot_params = opt_grid(ot_err, entr_regs, [samples_grid], [True])
+    ot_params = opt_grid(ot_err, [samples_grid], [True])
 
     # k means + OT
     def kmeans_ot_err(params):
