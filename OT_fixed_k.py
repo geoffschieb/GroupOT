@@ -744,17 +744,17 @@ def gen_moons(n_each, y_shift = 0.75, x_shift = 1, radius = 2, noise = 0):
 def test_moons():
     global errror_dict
 
-    # entr_regs = np.array([10.0])**range(-3, 5)
-    # gl_params = np.array([10.0])**range(-3, 5)
-    # ks = np.array(range(1, 50))
-    # samples = 50
-    # samples_grid = 50
+    entr_regs = np.array([10.0])**range(-3, 5)
+    gl_params = np.array([10.0])**range(-3, 5)
+    ks = np.array(range(1, 50))
+    samples = 50
+    samples_grid = 50
 
-    entr_regs = np.array([1e-3, 1e1])
-    gl_params = np.array([1e-3, 1e1])
-    ks = np.array([8, 10])
-    samples = 2
-    samples_grid = 2
+#     entr_regs = np.array([1e-3, 1e1])
+#     gl_params = np.array([1e-3, 1e1])
+#     ks = np.array([8, 10])
+#     samples = 2
+#     samples_grid = 2
 
     noise = 2
     d = 100
@@ -861,7 +861,8 @@ def test_moons():
                     warm_start = False,
                     inner_tol = 1e-4,
                     reduced_inner_tol = True,
-                    inner_tol_start = 1e0
+                    inner_tol_start = 1e0,
+                    max_iter = 300
                     )
             if hot_ret is None:
                 err += np.inf
@@ -889,7 +890,7 @@ def test_moons():
             (xs, xt, labs, labt, labs_ind) = get_data(train, sample)
             a = np.ones(ns)/ns
             b = np.ones(nt)/nt
-            kbary_ret = kbarycenter(a, b, xs, xt, k, [1.0, 1.0], entr_reg, warm_start = False, max_iter = 100)
+            kbary_ret = kbarycenter(a, b, xs, xt, k, [1.0, 1.0], entr_reg, warm_start = False, max_iter = 300)
             if kbary_ret is None:
                 err += np.inf
             else:
@@ -1044,7 +1045,9 @@ if __name__ == "__main__":
     # test_split_data_gaussian()
     # test_split_data_uniform()
     # test_constraint_ot()
+    t0 = time.time()
     test_moons()
+    print("Time for moons: {}".format(time.time() - t0))
     # test_opt_grid()
 
 
