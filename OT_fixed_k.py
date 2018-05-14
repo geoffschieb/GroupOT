@@ -10,6 +10,21 @@ import copy
 import time
 from mpl_toolkits.mplot3d import axes3d 
 from sklearn.cluster import KMeans
+from sklearn.neighbors import KNeighborsClassifier
+import itertools
+import warnings
+import pickle
+
+#%% Utility functions
+
+def opt_grid(fun, *args):
+    results = np.empty(tuple(map(len, args)))
+    for comb_ind in itertools.product(*map(lambda x: range(len(x)), args)):
+        results[comb_ind] = fun([args[i][comb_ind[i]] for i in range(len(args))])
+    multi_opt = np.unravel_index(np.argmin(results), results.shape)
+    return [args[i][multi_opt[i]] for i in range(len(args))]
+
+#%% OT functions
 
 def kl_div_vec(x, y):
     return np.sum(kl_div(x, y))
@@ -27,91 +42,97 @@ def barycenter_bregman_chain(b_left, b_right, Ms, lambdas, entr_reg_final,
         warm_start = False
         ):
 
-    entr_reg = 1000.0 if warm_start else entr_reg_final
+    warnings.filterwarnings("error")
+    try:
+        entr_reg = 1000.0 if warm_start else entr_reg_final
+        np.seterr(all="warn")
 
-    alphas = [[np.zeros(M.shape[i]) for i in range(2)] for M in Ms]
+        alphas = [[np.zeros(M.shape[i]) for i in range(2)] for M in Ms]
 
-    Ks = [np.exp(-M/entr_reg) for M in Ms]
-    Kts = [K.T.copy() for K in Ks]
+        Ks = [np.exp(-M/entr_reg) for M in Ms]
+        Kts = [K.T.copy() for K in Ks]
 
-    us = [[np.ones(K.shape[i]) for i in range(2)] for K in Ks]
-    us_old = copy.deepcopy(us)
-
-    weights = [[float(lambdas[i+j])/(lambdas[i]+lambdas[i+1]) for j in range(2)] for i in range(len(lambdas)-1)]
-
-    # print(lambdas)
-
-    converged = False
-    its = 0
-
-    def rebalance(i):
-        for j in range(2):
-            alphas[i][j] += entr_reg * np.log(us[i][j])
-            us[i][j] = np.ones(Ks[i].shape[j])
-
-    def update_K(i):
-        Ks[i] = np.exp(-(Ms[i] - alphas[i][0].reshape(-1, 1) - alphas[i][1].reshape(1, -1))/entr_reg)
-        Kts[i] = Ks[i].T.copy()
-
-    while not converged and its < max_iter: 
-        its += 1
-        if verbose:
-            print("Barycenter weights iteration: {}".format(its))
-
-        for i in range(len(us)):
-            if max([np.max(np.abs(us[i][j])) for j in range(2)]) > rebalance_thresh:
-                if verbose:
-                    print("Rebalancing pair {}".format(i))
-                rebalance(i)
-                update_K(i)
-
-        if relax_outside[0] == np.float("Inf"):
-            us[0][0] = np.divide(b_left, np.dot(Ks[0], us[0][1]))
-        else:
-            us[0][0] = np.exp(relax_outside[0]/(relax_outside[0] + entr_reg) * np.log(np.divide(b_left, np.dot(Ks[0], us[0][1]))))
-        if relax_outside[1] == np.float("Inf"):
-            us[-1][1] = np.divide(b_right, np.dot(Kts[-1], us[-1][0]))
-        else:
-            us[-1][1] = np.exp(relax_outside[1]/(relax_outside[1] + entr_reg) * np.log(np.divide(b_right, np.dot(Kts[-1], us[-1][0]))))
-
-        for i in range(len(Ks) - 1):
-            Ku1 = np.dot(Kts[i], us[i][0]) 
-            Kv2 = np.dot(Ks[i+1], us[i+1][1])
-            vKu1 = us[i][1] * Ku1
-            uKv2 = us[i+1][0] * Kv2
-            if relax_inside[i] == np.float("Inf"):
-                p = np.exp(weights[i][0] * np.log(vKu1) + weights[i][1] * np.log(uKv2))
-                us[i][1] = np.divide(us[i][1] * p, vKu1)
-                us[i+1][0] = np.divide(us[i+1][0] * p, uKv2)
-            else:
-                p = weights[i][0] * np.exp(entr_reg/(entr_reg + relax_inside[i]) * np.log(vKu1)) + \
-                        weights[i][1] * np.exp(entr_reg/(entr_reg + relax_inside[i]) * np.log(uKv2))
-                p = np.exp((entr_reg + relax_inside[i])/entr_reg * np.log(p))
-                us[i][1] = np.exp(relax_inside[i]/(relax_inside[i] + entr_reg) * np.log(np.divide(us[i][1] * p, vKu1)))
-                us[i+1][0] = np.exp(relax_inside[i]/(relax_inside[i] + entr_reg) * np.log(np.divide(us[i+1][0] * p, uKv2)))
-
-        err = sum([np.linalg.norm(us[i][j] - us_old[i][j])/np.linalg.norm(us[i][j]) for i in range(len(us)) for j in range(2)])
-        if verbose:
-            print("Relative error: {}".format(err))
-        # if its == 1:
-        #     print(u1)
-        # print(v1)
-
+        us = [[np.ones(K.shape[i]) for i in range(2)] for K in Ks]
         us_old = copy.deepcopy(us)
 
-        if err < tol:
-            if not warm_start or abs(entr_reg - entr_reg_final) < 1e-12:
-                converged = True
-            else:
-                for i in range(len(us)):
+        weights = [[float(lambdas[i+j])/(lambdas[i]+lambdas[i+1]) for j in range(2)] for i in range(len(lambdas)-1)]
+
+        # print(lambdas)
+
+        converged = False
+        its = 0
+
+        def rebalance(i):
+            for j in range(2):
+                alphas[i][j] += entr_reg * np.log(us[i][j])
+                us[i][j] = np.ones(Ks[i].shape[j])
+
+        def update_K(i):
+            Ks[i] = np.exp(-(Ms[i] - alphas[i][0].reshape(-1, 1) - alphas[i][1].reshape(1, -1))/entr_reg)
+            Kts[i] = Ks[i].T.copy()
+
+        while not converged and its < max_iter: 
+            its += 1
+            if verbose:
+                print("Barycenter weights iteration: {}".format(its))
+
+            for i in range(len(us)):
+                if max([np.max(np.abs(us[i][j])) for j in range(2)]) > rebalance_thresh:
+                    if verbose:
+                        print("Rebalancing pair {}".format(i))
                     rebalance(i)
-
-                entr_reg = max(entr_reg/2, entr_reg_final)
-                if verbose:
-                    print("New regularization parameter: {}".format(entr_reg))
-
-                for i in range(len(us)):
                     update_K(i)
+
+            if relax_outside[0] == np.float("Inf"):
+                us[0][0] = np.divide(b_left, np.dot(Ks[0], us[0][1]))
+            else:
+                us[0][0] = np.exp(relax_outside[0]/(relax_outside[0] + entr_reg) * np.log(np.divide(b_left, np.dot(Ks[0], us[0][1]))))
+            if relax_outside[1] == np.float("Inf"):
+                us[-1][1] = np.divide(b_right, np.dot(Kts[-1], us[-1][0]))
+            else:
+                us[-1][1] = np.exp(relax_outside[1]/(relax_outside[1] + entr_reg) * np.log(np.divide(b_right, np.dot(Kts[-1], us[-1][0]))))
+
+            for i in range(len(Ks) - 1):
+                Ku1 = np.dot(Kts[i], us[i][0]) 
+                Kv2 = np.dot(Ks[i+1], us[i+1][1])
+                vKu1 = us[i][1] * Ku1
+                uKv2 = us[i+1][0] * Kv2
+                if relax_inside[i] == np.float("Inf"):
+                    p = np.exp(weights[i][0] * np.log(vKu1) + weights[i][1] * np.log(uKv2))
+                    us[i][1] = np.divide(us[i][1] * p, vKu1)
+                    us[i+1][0] = np.divide(us[i+1][0] * p, uKv2)
+                else:
+                    p = weights[i][0] * np.exp(entr_reg/(entr_reg + relax_inside[i]) * np.log(vKu1)) + \
+                            weights[i][1] * np.exp(entr_reg/(entr_reg + relax_inside[i]) * np.log(uKv2))
+                    p = np.exp((entr_reg + relax_inside[i])/entr_reg * np.log(p))
+                    us[i][1] = np.exp(relax_inside[i]/(relax_inside[i] + entr_reg) * np.log(np.divide(us[i][1] * p, vKu1)))
+                    us[i+1][0] = np.exp(relax_inside[i]/(relax_inside[i] + entr_reg) * np.log(np.divide(us[i+1][0] * p, uKv2)))
+
+            err = sum([np.linalg.norm(us[i][j] - us_old[i][j])/np.linalg.norm(us[i][j]) for i in range(len(us)) for j in range(2)])
+            if verbose:
+                print("Relative error: {}".format(err))
+            # if its == 1:
+            #     print(u1)
+            # print(v1)
+
+            us_old = copy.deepcopy(us)
+
+            if err < tol:
+                if not warm_start or abs(entr_reg - entr_reg_final) < 1e-12:
+                    converged = True
+                else:
+                    for i in range(len(us)):
+                        rebalance(i)
+
+                    entr_reg = max(entr_reg/2, entr_reg_final)
+                    if verbose:
+                        print("New regularization parameter: {}".format(entr_reg))
+
+                    for i in range(len(us)):
+                        update_K(i)
+    except RuntimeWarning:
+        print("Warning issued!")
+        return None
 
     gammas = [us[i][0].reshape(-1, 1) * Ks[i] * us[i][1].reshape(1, -1) for i in range(len(us))]
     return gammas
@@ -140,7 +161,7 @@ def update_points(xs, xt, zs1, zs2, gammas, lambdas,
 
         if err < tol:
             converged = True
-            print("Total inner iterations: {}".format(its))
+            # print("Total inner iterations: {}".format(its))
 
     return (zs1, zs2)
 
@@ -149,13 +170,23 @@ def cluster_ot(b1, b2, xs, xt, k1, k2,
         lambdas, entr_reg,
         relax_outside = [np.float("Inf"), np.float("Inf")],
         relax_inside = [np.float("Inf"), np.float("Inf")],
-        tol = 1e-4, max_iter = 1000,
-        verbose = True,
+        tol = 1e-4,
+        inner_tol = 1e-5,
+        max_iter = 1000,
+        inner_max_iter = 1000,
+        verbose = False,
         debug = False,
-        warm_start = False
+        warm_start = False,
+        # iter_mult = 10,
+        # iter_inc = 10
+        reduced_inner_tol = False,
+        inner_tol_fact = 0.1,
+        inner_tol_start = 1e-3,
+        inner_tol_dec_every = 20
         ):
 
     converged = False
+    np.seterr(all="warn")
 
     d = xs.shape[1]
     # zs1  = 100 * np.random.normal(size = (k1, d))
@@ -168,11 +199,16 @@ def cluster_ot(b1, b2, xs, xt, k1, k2,
         zs2_l = [zs2]
 
     its = 0
+    # inner_its = iter_mult
+    inner_tol_actual = inner_tol if not reduced_inner_tol else inner_tol_start
 
     cost_old = np.float("Inf")
     
     while not converged and its < max_iter:
         its += 1
+        if reduced_inner_tol and its % inner_tol_dec_every == 0:
+            inner_tol_actual *= inner_tol_fact
+            inner_tol_actual = max(inner_tol, inner_tol_actual)
         if verbose:
             print("Alternating barycenter iteration: {}".format(its))
         if its > 1:
@@ -182,8 +218,15 @@ def cluster_ot(b1, b2, xs, xt, k1, k2,
                 zs2_l.append(zs2)
 
         Ms = [ot.dist(xs, zs1), ot.dist(zs1, zs2), ot.dist(zs2, xt)]
-        gammas = barycenter_bregman_chain(b1, b2, Ms, lambdas, entr_reg, verbose = False, tol = 1e-5, max_iter = 300, relax_outside = relax_outside,
-                relax_inside = relax_inside, warm_start = warm_start)
+        gammas = barycenter_bregman_chain(b1, b2, Ms, lambdas, entr_reg,
+                verbose = False,
+                tol = inner_tol_actual,
+                max_iter = inner_max_iter,
+                relax_outside = relax_outside,
+                relax_inside = relax_inside,
+                warm_start = warm_start)
+        if gammas is None:
+            return None 
         cost = np.sum([lambdas[i] * (np.sum(gammas[i] * Ms[i]) + entr_reg * entr_vec(gammas[i].reshape(-1))) for i in range(3)])
         if relax_outside[0] != np.float("Inf"):
             cost += lambdas[0] * relax_outside[0] * kl_div_vec(np.sum(gammas[0], axis = 1), b1)
@@ -198,7 +241,10 @@ def cluster_ot(b1, b2, xs, xt, k1, k2,
             print("Alternating barycenter relative error: {}".format(err))
         cost_old = cost.copy()
         if err < tol:
-            converged = True
+            if reduced_inner_tol and inner_tol_actual > inner_tol:
+                inner_tol_actual = max(inner_tol, inner_tol_actual * inner_tol_fact)
+            else:
+                converged = True
 
     if debug:
         return (zs1, zs2, np.sum(gammas[1], axis = 1), np.sum(gammas[1], axis = 0), gammas, zs1_l, zs2_l)
@@ -279,34 +325,57 @@ def kbarycenter(b1, b2, xs, xt, k,
         lambdas, entr_reg,
         relax_outside = [np.float("Inf"), np.float("Inf")],
         relax_inside = [np.float("Inf")],
-        tol = 1e-4, max_iter = 1000,
+        tol = 1e-4,
+        inner_tol = 1e-5,
+        inner_max_iter = 1000,
+        max_iter = 1000,
         warm_start = False,
-        verbose = True):
+        verbose = False,
+        reduced_inner_tol = False,
+        inner_tol_fact = 0.1,
+        inner_tol_start = 1e-3,
+        inner_tol_dec_every = 20
+        ):
 
     converged = False
 
     d = xs.shape[1]
     # zs = np.random.normal(size = (k, d))
     source_means = KMeans(n_clusters = k).fit(xs).cluster_centers_
-    target_means = KMeans(n_clusters = k).fit(xt).cluster_centers_
-    match = ot.emd(np.ones(k)/k, np.ones(k)/k, ot.dist(source_means, target_means))
-    optmap = np.argmax(match, axis = 1)
-    zs = 0.5 * source_means + 0.5 * target_means[optmap]
+    # target_means = KMeans(n_clusters = k).fit(xt).cluster_centers_
+    # match = ot.emd(np.ones(k)/k, np.ones(k)/k, ot.dist(source_means, target_means))
+    # optmap = np.argmax(match, axis = 1)
+    # zs = 0.5 * source_means + 0.5 * target_means[optmap]
+    zs = source_means
 
     its = 0
+    inner_tol_actual = inner_tol if not reduced_inner_tol else inner_tol_start
 
     cost_old = np.float("Inf")
     
     while not converged and its < max_iter:
         its += 1
+        if its % inner_tol_dec_every == 0:
+            inner_tol_actual *= inner_tol_fact
+            inner_tol_actual = max(inner_tol_actual, inner_tol)
         if verbose:
-            print("Alternating barycenter iteration: {}".format(its))
+            print("k barycenter iteration: {}".format(its))
         if its > 1:
             zs = update_points_barycenter(xs, xt, zs, gammas, lambdas)
 
         Ms = [ot.dist(xs, zs), ot.dist(zs, xt)]
-        gammas = barycenter_bregman_chain(b1, b2, Ms, lambdas, entr_reg, verbose = False, tol = 1e-5, max_iter = 300, warm_start = warm_start, relax_outside = relax_outside)
-        cost = np.sum([lambdas[i] * (np.sum(gammas[i] * Ms[i]) + entr_reg * entr_vec(gammas[i].reshape(-1))) for i in range(2)])
+        gammas = barycenter_bregman_chain(b1, b2, Ms, lambdas, entr_reg,
+                verbose = False,
+                tol = inner_tol_actual,
+                max_iter = inner_max_iter,
+                warm_start = warm_start,
+                relax_outside = relax_outside)
+
+        # Check for nans
+        if gammas is None:
+            return None
+
+        cost = np.sum([lambdas[i] * (np.sum(gammas[i] * Ms[i]) + entr_reg * entr_vec(gammas[i])) for i in range(2)])
 
         err = np.abs(cost - cost_old)/max(np.abs(cost), 1e-12)
         if verbose:
@@ -340,7 +409,7 @@ def update_points_map(xs, xt, zs1, zs2, gammas, lambdas,
 
         if err < tol:
             converged = True
-            print("Total inner iterations: {}".format(its))
+            # print("Total inner iterations: {}".format(its))
 
     return (zs1, zs2)
 
@@ -462,9 +531,30 @@ def bary_map(gamma, xs):
     # print(gamma.T.shape)
     return np.dot(gamma.T / np.sum(gamma, axis = 0).reshape(-1, 1), xs)
 
+def find_centers(xs, xt, gammas):
+    if len(gammas) == 3:
+        centers1 = np.dot(gammas[0].T, xs)/np.sum(gammas[0], axis = 0).reshape(-1, 1)
+        centers2 = np.dot(gammas[2], xt)/np.sum(gammas[2], axis = 1).reshape(-1, 1)
+    elif len(gammas) == 2:
+        centers1 = np.dot(gammas[0].T, xs)/np.sum(gammas[0], axis = 0).reshape(-1, 1)
+        centers2 = np.dot(gammas[1], xt)/np.sum(gammas[1], axis = 1).reshape(-1, 1)
+
+    return (centers1, centers2)
+
+def map_from_clusters(xs, xt, gammas):
+    (centers1, centers2) = find_centers(xs, xt, gammas)
+    if len(gammas) == 3:
+        offsets = np.dot((gammas[1]/np.sum(gammas[1], axis = 0)).T, centers1) - centers2
+        return xt + np.dot((gammas[2]/np.sum(gammas[2], axis = 1).reshape(-1, 1)).T, offsets)
+    else:
+        error("Not implemented yet!")
+
 def classify_1nn(xs, xt, labs):
     # print(np.argmin(ot.dist(xt, xs), axis = 1).shape)
     return labs[np.argmin(ot.dist(xt, xs), axis = 1)]
+
+def classify_knn(xs, xt, labs, k):
+    return KNeighborsClassifier(n_neighbors = k).fit(xs, labs).predict(xt)
 
 #%% Estimation/rounding functions
 
@@ -476,13 +566,10 @@ def estimate_w2_cluster(xs, xt, gammas, b0 = None):
     for i in range(len(gammas_thresh)):
         gammas_thresh[i][np.abs(gammas[i]) < 1e-10] = 0
 
+    (centers1, centers2) = find_centers(xs, xt, gammas)
     if len(gammas) == 3:
-        centers1 = np.dot(gammas[0].T, xs)/np.sum(gammas[0], axis = 0).reshape(-1, 1)
-        centers2 = np.dot(gammas[2], xt)/np.sum(gammas[2], axis = 1).reshape(-1, 1)
         costs = np.sum(gammas[1] * ot.dist(centers1, centers2), axis = 1)/np.sum(gammas[1], axis = 1)
     elif len(gammas) == 2:
-        centers1 = np.dot(gammas[0].T, xs)/np.sum(gammas[0], axis = 0).reshape(-1, 1)
-        centers2 = np.dot(gammas[1], xt)/np.sum(gammas[1], axis = 1).reshape(-1, 1)
         costs = np.sum((centers1 - centers2)**2, axis = 1)
     # print(centers1)
     # print(centers2)
@@ -490,6 +577,13 @@ def estimate_w2_cluster(xs, xt, gammas, b0 = None):
     total_cost = np.sum((gammas[0] / np.sum(gammas[0], axis = 1).reshape(-1, 1) * b0.reshape(-1, 1)) * costs)
     # total_cost = np.sum((gammas[0] * costs))
     return total_cost
+
+def estimate_distances(b1, b2, xs, xt, ks, entr_reg, lambdas = [1.0, 1.0, 1.0]):
+    results = np.zeros(len(ks))
+    for (i, k) in enumerate(ks):
+        (zs1, zs2, a1, a2, gammas) = cluster_ot(b1, b2, xs, xt, k, k, [1.0, 1.0, 1.0], entr_reg, verbose = True)
+        results[i] = estimate_w2_cluster(xs, xt, gammas, b1)
+    return results
 
 def calc_lab_ind(lab):
     lab_ind = [np.where(lab == i)[0] for i in np.sort(np.unique(lab))]
@@ -528,6 +622,9 @@ def class_err(labt, labt_pred, labt_ind = None):
         ret[i, 0] = np.mean(labt_pred[labt_ind[i]] == labt[labt_ind[i]])
         ret[i, 1] = np.mean(labt_pred[labt_ind[i]] != labt[labt_ind[i]])
     return ret
+
+def class_err_combined(labt, labt_pred):
+    return np.mean(labt != labt_pred)
 
 # def bootstrap_param(eval_proc, params, data, coverage, its):
 #     gt = eval_proc(data, params[-1])
@@ -575,8 +672,8 @@ def test_split_data_uniform():
         direction[0:2] = np.sign(x[0:2])
         return x + length * direction
 
-    d = 2
-    n = 200
+    d = 100
+    n = 1000
     samples_source = np.random.uniform(low=-1, high=1, size=(n, d))
     samples_target = np.random.uniform(low=-1, high=1, size=(n, d))
     samples_target = np.apply_along_axis(lambda x: transport_map(x, 2), 1, samples_target)
@@ -591,28 +688,31 @@ def test_split_data_uniform():
     cost = ot.sinkhorn2(b1, b2, ot.dist(samples_source, samples_target), 1)
     print("Sinkhorn: {}".format(cost))
 
-    # (zs1, zs2, a1, a2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, 8, 8, [1.0, 1.0, 1.0], 1, verbose = True)
+    ks = range(1, 100)
+    results = estimate_distances(b1, b2, samples_source, samples_target, ks, 1)
+    pl.plot(ks, results)
+    (zs1, zs2, a1, a2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, 8, 8, [1.0, 1.0, 1.0], 1, verbose = True)
     # (zs1, zs2, a1, a2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, 3, 3, [1.0, 1.0, 1.0], 1, verbose = True, relax_outside = [1e+5, 1e+5])
     # (zs1, zs2, a1, a2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, 8, 8, [1.0, 1.0, 1.0], 1, verbose = True, relax_inside = [1e0, 1e0])
-    (zs1, zs2, gammas) = reweighted_clusters(samples_source, samples_target, 8, [1.0, 0.5, 1.0], 5e-1, lb = float(1)/10)
+    # (zs1, zs2, gammas) = reweighted_clusters(samples_source, samples_target, 8, [1.0, 0.5, 1.0], 5e-1, lb = float(1)/10)
     cluster_cost = estimate_w2_cluster(samples_source, samples_target, gammas)
     print("Cluster cost: {}".format(cluster_cost))
 
     xs = samples_source
     xt = samples_target
 
-    print(zs1)
-    print(zs2)
+    # print(zs1)
+    # print(zs2)
 
-    # hubOT plot
-    pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
-    pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
-    pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
-    pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
-    ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
-    ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
-    ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
-    pl.show()
+    # # hubOT plot
+    # pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+    # pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+    # pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
+    # pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
+    # ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
+    # ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
+    # ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
+    # pl.show()
 
     # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True, relax_outside = [1e4, 1e4])
     # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True)
@@ -642,88 +742,282 @@ def gen_moons(n_each, y_shift = 0.75, x_shift = 1, radius = 2, noise = 0):
     return (X, y)
 
 def test_moons():
-    global gamma_ot, labs, labt, labt_pred, gammas_k, zs
-    samples = 10
-    noise = 0.05
-    d = 2
+    global errror_dict
+
+    # entr_regs = np.array([10.0])**range(-5, 5)
+    entr_regs = np.array([1e-3, 1e1])
+    # gl_params = np.array([10.0])**range(-3, 5)
+    gl_params = np.array([1e-3, 1e1])
+    # ks = np.array(range(1, 50))
+    ks = np.array([8, 10])
+
+    samples = 2
+    samples_grid = 2
+    noise = 2
+    d = 100
     k = 10
-    angle = 30
+    angle = 40
     ns = 300
     nt = 300
 
     err_mat_ot = np.zeros((2,2))
     err_mat_hot = np.zeros((2,2))
+    err_mat_hot2 = np.zeros((2,2))
     err_mat_gl = np.zeros((2,2))
     err_mat_km = np.zeros((2,2))
     err_mat_kb = np.zeros((2,2))
 
-    for sample in range(samples):
-        # Generate two moon samples
-        (xs, labs) = gen_moons(int(ns/2), noise = 0)
-        (xt, labt) = gen_moons(int(nt/2), noise = 0)
-        # Rotate target samples
-        rho = gen_rot2d(angle)
-        xt = np.dot(xt, rho.T)
+    def gen_data(samples):
+        data = []
+        for sample in range(samples):
+            # Generate two moon samples
+            (xs, labs) = gen_moons(int(ns/2), noise = 0)
+            (xt, labt) = gen_moons(int(nt/2), noise = 0)
+            # Rotate target samples
+            rho = gen_rot2d(angle)
+            xt = np.dot(xt, rho.T)
 
-        # Embed in higher dim
-        if d > 2:
-            proj = np.random.normal(size = (2, d))
+            # Embed in higher dim
+            if d > 2:
+                proj = np.random.normal(size = (2, d))
+            else:
+                proj = np.eye(d)
+            xs = np.dot(xs, proj) + noise * np.random.normal(size = (ns, d))
+            xt = np.dot(xt, proj) + noise * np.random.normal(size = (nt, d))
+
+            labs_ind =  calc_lab_ind(labs)
+            data.append((xs, xt, labs, labt, labs_ind))
+        return data
+
+    train_data = gen_data(samples_grid)
+    test_data = gen_data(samples)
+
+    def get_data(train, i):
+        if train:
+            return train_data[i]
         else:
-            proj = np.eye(d)
-        xs = np.dot(xs, proj) + noise * np.random.normal(size = (ns, d))
-        xt = np.dot(xt, proj) + noise * np.random.normal(size = (nt, d))
+            return test_data[i]
 
-        labs_ind =  calc_lab_ind(labs)
+    # Determine best parameters
 
-        # Compute OT mapping
-        gamma_ot = ot.da.EMDTransport().fit(Xs = xs, Xt = xt).coupling_
-        # labt_pred = classify_ot(gamma_ot, labs_ind, labs)
-        labt_pred = classify_1nn(xs, bary_map(gamma_ot, xs), labs)
-        err_mat_ot += class_err(labt, labt_pred)
+    # Entropically regularized OT
+    def ot_err(params):
+        (entr_reg, samples, train) = params
+        print("Running OT for {}".format(params))
+        err = 0.0
+        for sample in range(samples):
+            (xs, xt, labs, labt, labs_ind) = get_data(train, sample)
+            # Compute OT mapping
+            gamma_ot = ot.da.EMDTransport().fit(Xs = xs, Xt = xt).coupling_
+            if np.any(np.isnan(gamma_ot)):
+                err += np.inf
+            else:
+                # labt_pred = classify_ot(gamma_ot, labs_ind, labs)
+                labt_pred = classify_1nn(xs, bary_map(gamma_ot, xs), labs)
+                # labt_pred = classify_knn(xs, bary_map(gamma_ot, xs), labs, 50)
+                err += class_err_combined(labt, labt_pred)
 
-        # k means + OT
-        gamma_km = kmeans_transport(xs, xt, k, 1e1)
-        # labt_pred_km = classify_ot(gamma_km, labs_ind, labs)
-        labt_pred_km = classify_1nn(xs, bary_map(gamma_km, xs), labs)
-        err_mat_km += class_err(labt, labt_pred_km)
+        err /= samples
+        print(err)
+        return err
+    
+    ot_params = opt_grid(ot_err, entr_regs, [samples_grid], [True])
 
-        # Compute hub OT
-        a = np.ones(ns)/ns
-        b = np.ones(nt)/nt
-        (zs1, zs2, a1, a2, gammas_k) = cluster_ot(a, b, xs, xt, k, k, [1.0, 1.0, 1.0], 1e-2, relax_outside = [np.inf, np.inf], warm_start = False)
-        # labt_pred_hot = classify_cluster_ot(gammas_k, labs_ind)
-        labt_pred_hot = classify_1nn(xs, bary_map(total_gamma(gammas_k), xs), labs)
-        err_mat_hot += class_err(labt, labt_pred_hot)
+    # k means + OT
+    def kmeans_ot_err(params):
+        (entr_reg, k, samples, train) = params
+        print("Running kmeans + OT for {}".format(params))
+        err = 0.0
+        for sample in range(samples):
+            (xs, xt, labs, labt, labs_ind) = get_data(train, sample)
+            gamma_km = kmeans_transport(xs, xt, k, entr_reg)
+            if np.any(np.isnan(gamma_km)):
+                err += np.inf
+            else:
+                # labt_pred_km = classify_ot(gamma_km, labs_ind, labs)
+                labt_pred_km = classify_1nn(xs, bary_map(gamma_km, xs), labs)
+                err += class_err_combined(labt, labt_pred_km)
+        err /= samples
+        print(err)
+        return err
+    
+    kmeans_ot_params = opt_grid(kmeans_ot_err, entr_regs, ks, [samples_grid], [True])
 
-        # k barycenter OT
-        (zs, gammas) = kbarycenter(a, b, xs, xt, k, [1.0, 1.0], 1e-3, warm_start = True, max_iter = 100)
-        # labt_pred_kb = classify_kbary(gammas, labs_ind)
-        labt_pred_kb = classify_1nn(xs, bary_map(total_gamma(gammas), xs), labs)
-        err_mat_kb += class_err(labt, labt_pred_kb)
+    # hubOT
+    def hot_err(params):
+        (entr_reg, k, samples, train) = params
+        print("Running hubOT for {}".format(params))
+        err = 0.0
+        for sample in range(samples):
+            # Compute hub OT
+            (xs, xt, labs, labt, labs_ind) = get_data(train, sample)
+            a = np.ones(ns)/ns
+            b = np.ones(nt)/nt
+            hot_ret = cluster_ot(a, b, xs, xt, k, k, [1.0, 1.0, 1.0], entr_reg,
+                    relax_outside = [np.inf, np.inf],
+                    warm_start = False,
+                    inner_tol = 1e-4,
+                    reduced_inner_tol = True,
+                    inner_tol_start = 1e0
+                    )
+            if hot_ret is None:
+                err += np.inf
+            else:
+                (zs1, zs2, a1, a2, gammas_k) = hot_ret
+                # labt_pred_hot = classify_cluster_ot(gammas_k, labs_ind)
+                labt_pred_hot = classify_1nn(xs, bary_map(total_gamma(gammas_k), xs), labs)
+                # labt_pred_hot2 = classify_1nn(xs, map_from_clusters(xs, xt, gammas_k), labs)
+                err += class_err_combined(labt, labt_pred_hot)
+                # err_mat_hot2 += class_err(labt, labt_pred_hot2)
 
-        # Compute group lasso regularized OT
-        # gamma_gl = ot.da.SinkhornLpl1Transport(reg_e=1e2, reg_cl=1e0).fit(Xs = xs, ys = labs, Xt = xt).coupling_
-        gamma_gl = ot.da.SinkhornL1l2Transport(reg_e=1e-1, reg_cl=1e-0).fit(Xs = xs, ys = labs, Xt = xt).coupling_
-        # labt_pred_gl = classify_ot(gamma_gl, labs_ind, labs)
-        labt_pred_gl = classify_1nn(xs, bary_map(gamma_gl, xs), labs)
-        err_mat_gl += class_err(labt, labt_pred_gl)
+        err /= samples
+        print(err)
+        return err
+    
+    hot_params = opt_grid(hot_err, entr_regs, ks, [samples_grid], [True])
 
-    err_mat_ot /= samples
-    err_mat_hot /= samples
-    err_mat_km /= samples
-    err_mat_kb /= samples
-    err_mat_gl /= samples
-    print(err_mat_ot)
-    print(err_mat_gl)
-    print(err_mat_km)
-    print(err_mat_kb)
-    print(err_mat_hot)
+    # k barycenter
+    def kbary_err(params):
+        (entr_reg, k, samples, train) = params
+        print("Running k barycenter for {}".format(params))
+        err = 0.0
+        for sample in range(samples):
+            # k barycenter OT
+            (xs, xt, labs, labt, labs_ind) = get_data(train, sample)
+            a = np.ones(ns)/ns
+            b = np.ones(nt)/nt
+            kbary_ret = kbarycenter(a, b, xs, xt, k, [1.0, 1.0], entr_reg, warm_start = False, max_iter = 100)
+            if kbary_ret is None:
+                err += np.inf
+            else:
+                (zs, gammas) = kbary_ret
+                # labt_pred_kb = classify_kbary(gammas, labs_ind)
+                labt_pred_kb = classify_1nn(xs, bary_map(total_gamma(gammas), xs), labs)
+                err += class_err_combined(labt, labt_pred_kb)
+
+        err /= samples
+        print(err)
+        return err
+    
+    kb_params = opt_grid(kbary_err, entr_regs, ks, [samples_grid], [True])
+
+    # Group lasso
+    def gl_ot_err(params):
+        (entr_reg, eta, samples, train) = params
+        print("Running group lasso for {}".format(params))
+        err = 0.0
+        for sample in range(samples):
+            (xs, xt, labs, labt, labs_ind) = get_data(train, sample)
+
+            # Compute group lasso regularized OT
+            # gamma_gl = ot.da.SinkhornLpl1Transport(reg_e=1e2, reg_cl=1e0).fit(Xs = xs, ys = labs, Xt = xt).coupling_
+            try:
+                gamma_gl = ot.da.SinkhornL1l2Transport(reg_e=entr_reg, reg_cl=eta).fit(Xs = xs, ys = labs, Xt = xt).coupling_
+                # labt_pred_gl = classify_ot(gamma_gl, labs_ind, labs)
+                labt_pred_gl = classify_1nn(xs, bary_map(gamma_gl, xs), labs)
+                err += class_err_combined(labt, labt_pred_gl)
+            except RuntimeWarning:
+                err += np.inf
+
+        err /= samples
+        print(err)
+        return err
+    
+    gl_ot_params = opt_grid(gl_ot_err, entr_regs, gl_params, [samples_grid], [True])
+    params = {
+            "ot": ot_params,
+            "kmeans_ot": kmeans_ot_params,
+            "hot": hot_params,
+            "kbary": kb_params,
+            "gl": gl_ot_params
+            }
+
+    # Change to testing
+    for var in params.values():
+        var[-2] = samples
+        var[-1] = False
+
+    error_dict = {}
+    error_dict["ot"] = ot_err(ot_params)
+    error_dict["kmeans_ot"] = kmeans_ot_err(kmeans_ot_params)
+    error_dict["hot"] = hot_err(hot_params)
+    error_dict["kbary"] = kbary_err(kb_params)
+    error_dict["gl"] = gl_ot_err(gl_ot_params)
+
+    with open("two_moons_results.npz", 'wb') as outfile:
+        pickle.dump([params, error_dict], outfile)
+
+    # for sample in range(samples):
+    #     (xs, xt, labs, labt, labs_ind) = gen_data()
+
+    #     # Compute OT mapping
+    #     gamma_ot = ot.da.EMDTransport().fit(Xs = xs, Xt = xt).coupling_
+    #     # labt_pred = classify_ot(gamma_ot, labs_ind, labs)
+    #     labt_pred = classify_1nn(xs, bary_map(gamma_ot, xs), labs)
+    #     # labt_pred = classify_knn(xs, bary_map(gamma_ot, xs), labs, 50)
+    #     err_mat_ot += class_err(labt, labt_pred)
+
+    #     # k means + OT
+    #     gamma_km = kmeans_transport(xs, xt, k, 1e1)
+    #     # labt_pred_km = classify_ot(gamma_km, labs_ind, labs)
+    #     labt_pred_km = classify_1nn(xs, bary_map(gamma_km, xs), labs)
+    #     err_mat_km += class_err(labt, labt_pred_km)
+
+    #     # Compute hub OT
+    #     a = np.ones(ns)/ns
+    #     b = np.ones(nt)/nt
+    #     (zs1, zs2, a1, a2, gammas_k) = cluster_ot(a, b, xs, xt, k, k, [1.0, 1.0, 1.0], 1e1,
+    #             relax_outside = [np.inf, np.inf],
+    #             warm_start = True,
+    #             inner_tol = 5e-3,
+    #             reduced_inner_tol = True,
+    #             inner_tol_start = 1e0
+    #             )
+    #     # labt_pred_hot = classify_cluster_ot(gammas_k, labs_ind)
+    #     labt_pred_hot = classify_1nn(xs, bary_map(total_gamma(gammas_k), xs), labs)
+    #     labt_pred_hot2 = classify_1nn(xs, map_from_clusters(xs, xt, gammas_k), labs)
+    #     err_mat_hot += class_err(labt, labt_pred_hot)
+    #     err_mat_hot2 += class_err(labt, labt_pred_hot2)
+
+    #     # # k barycenter OT
+    #     # (zs, gammas) = kbarycenter(a, b, xs, xt, k, [1.0, 1.0], 1e-2, warm_start = True, max_iter = 100)
+    #     # # labt_pred_kb = classify_kbary(gammas, labs_ind)
+    #     # labt_pred_kb = classify_1nn(xs, bary_map(total_gamma(gammas), xs), labs)
+    #     # err_mat_kb += class_err(labt, labt_pred_kb)
+
+    #     # Compute group lasso regularized OT
+    #     # gamma_gl = ot.da.SinkhornLpl1Transport(reg_e=1e2, reg_cl=1e0).fit(Xs = xs, ys = labs, Xt = xt).coupling_
+    #     gamma_gl = ot.da.SinkhornL1l2Transport(reg_e=1e1, reg_cl=1e-0).fit(Xs = xs, ys = labs, Xt = xt).coupling_
+    #     # labt_pred_gl = classify_ot(gamma_gl, labs_ind, labs)
+    #     labt_pred_gl = classify_1nn(xs, bary_map(gamma_gl, xs), labs)
+    #     err_mat_gl += class_err(labt, labt_pred_gl)
+
+    # err_mat_ot /= samples
+    # err_mat_hot /= samples
+    # err_mat_hot2 /= samples
+    # err_mat_km /= samples
+    # err_mat_kb /= samples
+    # err_mat_gl /= samples
+    # print(err_mat_ot)
+    # print(err_mat_gl)
+    # print(err_mat_km)
+    # print(err_mat_kb)
+    # print(err_mat_hot)
+    # print(err_mat_hot2)
 
     # # Plot points
     # pl.scatter(*xs.T)
     # pl.scatter(*xt.T)
     # pl.axis("equal")
     # pl.show()
+
+def test_opt_grid():
+    global ret, a, b
+    a = np.array([7, 9, 11, -10])
+    b = np.array([11, 2, 3, -10, -20])
+    def fun(x):
+        return x[0] + x[1]
+    ret = opt_grid(fun, a, b)
 
 #     # hubOT plot
 #     pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
@@ -748,6 +1042,7 @@ if __name__ == "__main__":
     # test_split_data_uniform()
     # test_constraint_ot()
     test_moons()
+    # test_opt_grid()
 
 
     ### Barycenter histogram test
