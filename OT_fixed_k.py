@@ -744,28 +744,31 @@ def gen_moons(n_each, y_shift = 0.75, x_shift = 1, radius = 2, noise = 0):
 def test_moons():
     global errror_dict
 
-    # entr_regs = np.array([10.0])**range(-5, 5)
-    entr_regs = np.array([1e-3, 1e1])
+    # entr_regs = np.array([10.0])**range(-3, 5)
     # gl_params = np.array([10.0])**range(-3, 5)
-    gl_params = np.array([1e-3, 1e1])
     # ks = np.array(range(1, 50))
-    ks = np.array([8, 10])
+    # samples = 50
+    # samples_grid = 50
 
+    entr_regs = np.array([1e-3, 1e1])
+    gl_params = np.array([1e-3, 1e1])
+    ks = np.array([8, 10])
     samples = 2
     samples_grid = 2
+
     noise = 2
     d = 100
-    k = 10
+    # k = 10
     angle = 40
-    ns = 300
-    nt = 300
+    ns = 600
+    nt = 600
 
-    err_mat_ot = np.zeros((2,2))
-    err_mat_hot = np.zeros((2,2))
-    err_mat_hot2 = np.zeros((2,2))
-    err_mat_gl = np.zeros((2,2))
-    err_mat_km = np.zeros((2,2))
-    err_mat_kb = np.zeros((2,2))
+#     err_mat_ot = np.zeros((2,2))
+#     err_mat_hot = np.zeros((2,2))
+#     err_mat_hot2 = np.zeros((2,2))
+#     err_mat_gl = np.zeros((2,2))
+#     err_mat_km = np.zeros((2,2))
+#     err_mat_kb = np.zeros((2,2))
 
     def gen_data(samples):
         data = []
@@ -944,7 +947,7 @@ def test_moons():
     error_dict["kbary"] = kbary_err(kb_params)
     error_dict["gl"] = gl_ot_err(gl_ot_params)
 
-    with open("two_moons_results.npz", 'wb') as outfile:
+    with open("two_moons_results.bin", 'wb') as outfile:
         pickle.dump([params, error_dict], outfile)
 
     # for sample in range(samples):
