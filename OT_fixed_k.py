@@ -756,12 +756,25 @@ def test_moons():
 #     samples = 2
 #     samples_grid = 2
 
-    noise = 2
+    noise = 1
     d = 100
     # k = 10
     angle = 40
     ns = 600
     nt = 600
+
+    simulation_params = {
+            "noise": noise,
+            "d": d,
+            "angle": angle,
+            "ns": ns,
+            "nt": nt,
+            "entr_regs": entr_regs,
+            "gl_params": gl_params,
+            "ks": ks,
+            "samples_test": samples,
+            "samples_train": samples_grid
+            }
 
 #     err_mat_ot = np.zeros((2,2))
 #     err_mat_hot = np.zeros((2,2))
@@ -949,7 +962,7 @@ def test_moons():
     error_dict["gl"] = gl_ot_err(gl_ot_params)
 
     with open("two_moons_results.bin", 'wb') as outfile:
-        pickle.dump([params, error_dict], outfile)
+        pickle.dump([simulation_params, params, error_dict], outfile)
 
     # for sample in range(samples):
     #     (xs, xt, labs, labt, labs_ind) = gen_data()
