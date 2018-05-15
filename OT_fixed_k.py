@@ -1325,7 +1325,7 @@ def test_caltech_office():
     features_name = "GoogleNet1024"
     outfile = "caltech_google_ama_to_cal.bin"
 
-    perclass = {"source": 20, "target": 1000}
+    perclass = {"source": 20, "target": 20}
     samples = {"train": 10, "test": 10}
 
     entr_regs = np.array([10.0])**range(-3, 5)
