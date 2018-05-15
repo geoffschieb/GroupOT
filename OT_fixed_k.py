@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.stats as stats
+from scipy.io import loadmat
 import matplotlib
 import ot
 import scipy as sp
@@ -14,6 +15,8 @@ from sklearn.neighbors import KNeighborsClassifier
 import itertools
 import warnings
 import pickle
+import os
+from sklearn import preprocessing
 
 #%% Utility functions
 
@@ -32,6 +35,7 @@ def kl_div_vec(x, y):
 def entr_vec(x):
     return np.sum(entr(x))
 
+# @profile
 def barycenter_bregman_chain(b_left, b_right, Ms, lambdas, entr_reg_final,
         relax_outside = [np.float("Inf"), np.float("Inf")],
         relax_inside = [np.float("Inf"), np.float("Inf")], # TODO This should adapt to the size of Ms
@@ -39,12 +43,13 @@ def barycenter_bregman_chain(b_left, b_right, Ms, lambdas, entr_reg_final,
         tol = 1e-7,
         max_iter = 500,
         rebalance_thresh = 1e10,
-        warm_start = False
+        warm_start = False,
+        entr_reg_start = 1000.0
         ):
 
     warnings.filterwarnings("error")
     try:
-        entr_reg = 1000.0 if warm_start else entr_reg_final
+        entr_reg = entr_reg_start if warm_start else entr_reg_final
         np.seterr(all="warn")
 
         alphas = [[np.zeros(M.shape[i]) for i in range(2)] for M in Ms]
@@ -124,9 +129,10 @@ def barycenter_bregman_chain(b_left, b_right, Ms, lambdas, entr_reg_final,
                     for i in range(len(us)):
                         rebalance(i)
 
-                    entr_reg = max(entr_reg/2, entr_reg_final)
+                    entr_reg = max(entr_reg/5, entr_reg_final)
                     if verbose:
-                        print("New regularization parameter: {}".format(entr_reg))
+                    # if True:
+                        print("New regularization parameter: {} at iteration {}".format(entr_reg, its))
 
                     for i in range(len(us)):
                         update_K(i)
@@ -137,6 +143,8 @@ def barycenter_bregman_chain(b_left, b_right, Ms, lambdas, entr_reg_final,
         warnings.filterwarnings("default")
 
     gammas = [us[i][0].reshape(-1, 1) * Ks[i] * us[i][1].reshape(1, -1) for i in range(len(us))]
+    if verbose:
+        print("Bregman iterations: {}".format(its))
     return gammas
 
 
@@ -172,6 +180,7 @@ def plot_transport_map(xs, xt):
         pl.plot([xs[i, 0], xt[i, 0]], [xs[i, 1], xt[i, 1]], 'k', alpha = 0.5)
 
 
+# @profile
 def cluster_ot(b1, b2, xs, xt, k1, k2,
         lambdas, entr_reg,
         relax_outside = [np.float("Inf"), np.float("Inf")],
@@ -188,7 +197,8 @@ def cluster_ot(b1, b2, xs, xt, k1, k2,
         reduced_inner_tol = False,
         inner_tol_fact = 0.1,
         inner_tol_start = 1e-3,
-        inner_tol_dec_every = 20
+        inner_tol_dec_every = 20,
+        entr_reg_start = 1000.0
         ):
 
     converged = False
@@ -230,7 +240,9 @@ def cluster_ot(b1, b2, xs, xt, k1, k2,
                 max_iter = inner_max_iter,
                 relax_outside = relax_outside,
                 relax_inside = relax_inside,
-                warm_start = warm_start)
+                warm_start = warm_start,
+                entr_reg_start = entr_reg_start
+                )
         if gammas is None:
             return None 
         cost = np.sum([lambdas[i] * (np.sum(gammas[i] * Ms[i]) + entr_reg * entr_vec(gammas[i].reshape(-1))) for i in range(3)])
@@ -548,6 +560,9 @@ def find_centers(xs, xt, gammas):
     return (centers1, centers2)
 
 def map_from_clusters(xs, xt, gammas):
+    """
+    Compute target to source mapping using clusters
+    """
     (centers1, centers2) = find_centers(xs, xt, gammas)
     if len(gammas) == 3:
         offsets = np.dot((gammas[1]/np.sum(gammas[1], axis = 0)).T, centers1) - centers2
@@ -768,8 +783,9 @@ def gen_moons_data(ns, nt, angle, d, noise, samples):
         xs = np.dot(xs, proj) + noise * np.random.normal(size = (ns, d))
         xt = np.dot(xt, proj) + noise * np.random.normal(size = (nt, d))
 
-        labs_ind =  calc_lab_ind(labs)
-        data.append((xs, xt, labs, labt, labs_ind))
+        # labs_ind =  calc_lab_ind(labs)
+        # data.append((xs, xt, labs, labt, labs_ind))
+        data.append((xs, xt, labs, labt))
     return data
 
 def prep_synth_clustering_data(ns, nt, d, prop1, prop2):
@@ -888,6 +904,7 @@ def test_moons_kplot():
                     )
             if hot_ret is None:
                 err += np.inf
+                break
             else:
                 (zs1, zs2, a1, a2, gammas) = hot_ret
                 # labt_pred_hot = classify_cluster_ot(gammas_k, labs_ind)
@@ -918,11 +935,41 @@ def test_moons_kplot():
     pl.show()
 
 def test_moons():
-    entr_regs = np.array([10.0])**range(-3, 5)
-    gl_params = np.array([100.0])**range(-3, 5)
-    ks = np.array([2])**range(1, 8)
-    samples_test = 1
-    samples_train = 1
+    samples = {"train": 1, "test": 1}
+
+    # entr_regs = np.array([10.0])**range(-3, 5)
+    # gl_params = np.array([10.0])**range(-3, 5)
+    # ks = np.array([2])**range(1, 7)
+    entr_regs = np.array([10.0, 100.0])
+    gl_params = np.array([10.0])**range(-3, 5)
+    ks = np.array([2])**range(5, 6)
+
+    estimators = {
+            # "ot_gl": {
+            #     "function": "ot_gl",
+            #     "parameter_ranges": [entr_regs, gl_params]
+            #     },
+            # "ot": {
+            #     "function": "ot",
+            #     "parameter_ranges": []
+            #     },
+            # "ot_entr": {
+            #     "function": "ot_entr",
+            #     "parameter_ranges": [entr_regs]
+            #     },
+            # "ot_kmeans": {
+            #     "function": "ot_kmeans",
+            #     "parameter_ranges": [entr_regs, ks]
+            #     },
+            "ot_2kbary": {
+                "function": "ot_2kbary",
+                "parameter_ranges": [entr_regs, ks]
+                },
+            # "ot_kbary": {
+            #     "function": "ot_kbary",
+            #     "parameter_ranges": [entr_regs, ks]
+            # }
+            }
 
     noise = 1
     d = 100
@@ -940,18 +987,22 @@ def test_moons():
             "entr_regs": entr_regs,
             "gl_params": gl_params,
             "ks": ks,
-            "samples_test": samples_test,
-            "samples_train": samples_train,
-            "outfile": "two_moons_results.bin"
+            "samples_test": samples["test"],
+            "samples_train": samples["train"],
+            "outfile": "two_moons_results.bin",
+            "estimators": estimators
             }
 
-    def gen_data():
-        train_data = gen_moons_data(ns, nt, angle, d, noise, samples_train)
-        test_data = gen_moons_data(ns, nt, angle, d, noise, samples_test)
+    train_data = gen_moons_data(ns, nt, angle, d, noise, samples["train"])
+    test_data = gen_moons_data(ns, nt, angle, d, noise, samples["test"])
 
-        return (train_data, test_data)
+    def get_data(train, i):
+        if train:
+            return train_data[i]
+        else:
+            return test_data[i]
 
-    test_data(simulation_params, gen_data)
+    test_domain_adaptation(simulation_params, get_data)
 
 def test_satija():
     entr_regs = np.array([10.0])**range(-3, 5)
@@ -973,25 +1024,10 @@ def test_satija():
             "outfile": "two_moons_results.bin"
             }
 
-    def gen_data():
-        (xs, xt, labs, labt) = prep_satija_data()
-        print("Subsampling")
-        train_data = subsample_data(xs, xt, labs, labt, nperclass, samples_train)
-        test_data = subsample_data(xs, xt, labs, labt, nperclass, samples_test)
-
-        return (train_data, test_data)
-
-    test_data(simulation_params, gen_data)
-
-def test_data(sim_params, gen_data):
-    (train_data, test_data) = gen_data()
-    
-    # Extract data
-    entr_regs = sim_params["entr_regs"]
-    ks = sim_params["ks"]
-    gl_params = sim_params["gl_params"]
-    samples_test = sim_params["samples_test"]
-    samples_train = sim_params["samples_train"]
+    (xs, xt, labs, labt) = prep_satija_data()
+    print("Subsampling")
+    train_data = subsample_data(xs, xt, labs, labt, nperclass, samples_train)
+    test_data = subsample_data(xs, xt, labs, labt, nperclass, samples_test)
 
     def get_data(train, i):
         if train:
@@ -999,162 +1035,259 @@ def test_data(sim_params, gen_data):
         else:
             return test_data[i]
 
+    test_domain_adaptation(simulation_params, get_data)
+
+def test_domain_adaptation(sim_params, get_data):
+    global est_train_results, est_test_results
+    
+    # Extract data from parameters
+    entr_regs = sim_params["entr_regs"]
+    ks = sim_params["ks"]
+    gl_params = sim_params["gl_params"]
+    samples_test = sim_params["samples_test"]
+    samples_train = sim_params["samples_train"]
+    estimators = sim_params["estimators"]
+
     # Determine best parameters
 
-    # Entropically regularized OT
-    def ot_err(params):
-        (samples, train) = params
-        print("Running OT for {}".format(params))
-        err = 0.0
-        for sample in range(samples):
-            (xs, xt, labs, labt, labs_ind) = get_data(train, sample)
-            # Compute OT mapping
-            gamma_ot = ot.da.EMDTransport().fit(Xs = xs, Xt = xt).coupling_
-            if np.any(np.isnan(gamma_ot)):
-                err += np.inf
-            else:
-                # labt_pred = classify_ot(gamma_ot, labs_ind, labs)
-                labt_pred = classify_1nn(xs, bary_map(gamma_ot, xs), labs)
-                # labt_pred = classify_knn(xs, bary_map(gamma_ot, xs), labs, 50)
-                err += class_err_combined(labt, labt_pred)
+    opt_params = {}
 
-        err /= samples
-        print(err)
-        return err
-    
-    ot_params = opt_grid(ot_err, [samples_train], [True])
+    # Regular OT
+    def ot_err(data, params):
+        print("Running OT for {}".format(params))
+        (xs, xt, labs, labt) = data
+        # Compute OT mapping
+        gamma_ot = ot.da.EMDTransport().fit(Xs = xs, Xt = xt).coupling_
+        # if np.any(np.isnan(gamma_ot)):
+        #     return(np.inf)
+        # else:
+        # labt_pred = classify_ot(gamma_ot, labs_ind, labs)
+        labt_pred = classify_1nn(xs, bary_map(gamma_ot, xs), labs)
+        # labt_pred = classify_knn(xs, bary_map(gamma_ot, xs), labs, 50)
+        return(class_err_combined(labt, labt_pred))
+
+    # Entropically regularized OT
+    def ot_entr_err(data, params):
+        entr_reg = params
+        print("Running entr reg OT for {}".format(params))
+        (xs, xt, labs, labt) = data
+        # Compute OT mapping
+        a = np.ones(xs.shape[0])/xs.shape[0]
+        b = np.ones(xt.shape[0])/xt.shape[0]
+        try:
+            warnings.filterwarnings("error")
+            gamma_ot = ot.sinkhorn(a, b, ot.dist(xs, xt), entr_reg)
+        except RuntimeWarning:
+            return np.inf
+        finally:
+            warnings.filterwarnings("default")
+        # if np.any(np.isnan(gamma_ot)):
+        #     return(np.inf)
+        # else:
+        # labt_pred = classify_ot(gamma_ot, labs_ind, labs)
+        labt_pred = classify_1nn(xs, bary_map(gamma_ot, xs), labs)
+        # labt_pred = classify_knn(xs, bary_map(gamma_ot, xs), labs, 50)
+        return(class_err_combined(labt, labt_pred))
 
     # k means + OT
-    def kmeans_ot_err(params):
-        (entr_reg, k, samples, train) = params
+    def kmeans_ot_err(data, params):
+        (entr_reg, k) = params
         print("Running kmeans + OT for {}".format(params))
-        err = 0.0
-        for sample in range(samples):
-            (xs, xt, labs, labt, labs_ind) = get_data(train, sample)
-            gamma_km = kmeans_transport(xs, xt, k, entr_reg)
-            if np.any(np.isnan(gamma_km)):
-                err += np.inf
-            else:
-                # labt_pred_km = classify_ot(gamma_km, labs_ind, labs)
-                labt_pred_km = classify_1nn(xs, bary_map(gamma_km, xs), labs)
-                err += class_err_combined(labt, labt_pred_km)
-        err /= samples
-        print(err)
-        return err
+        (xs, xt, labs, labt) = data
+        gamma_km = kmeans_transport(xs, xt, k, entr_reg)
+        if np.any(np.isnan(gamma_km)):
+            return(np.inf)
+        else:
+            # labt_pred_km = classify_ot(gamma_km, labs_ind, labs)
+            labt_pred_km = classify_1nn(xs, bary_map(gamma_km, xs), labs)
+            return class_err_combined(labt, labt_pred_km)
     
-    kmeans_ot_params = opt_grid(kmeans_ot_err, entr_regs, ks, [samples_train], [True])
-
     # hubOT
-    def hot_err(params):
-        (entr_reg, k, samples, train) = params
+    def hot_err(data, params):
+        (entr_reg, k) = params
         print("Running hubOT for {}".format(params))
-        err = 0.0
-        for sample in range(samples):
-            # Compute hub OT
-            (xs, xt, labs, labt, labs_ind) = get_data(train, sample)
-            a = np.ones(xs.shape[0])/xs.shape[0]
-            b = np.ones(xt.shape[0])/xt.shape[0]
-            hot_ret = cluster_ot(a, b, xs, xt, k, k, [1.0, 1.0, 1.0], entr_reg,
-                    relax_outside = [np.inf, np.inf],
-                    warm_start = False,
-                    inner_tol = 1e-4,
-                    reduced_inner_tol = True,
-                    inner_tol_start = 1e0,
-                    max_iter = 300
-                    )
-            if hot_ret is None:
-                err += np.inf
-            else:
-                (zs1, zs2, a1, a2, gammas_k) = hot_ret
-                # labt_pred_hot = classify_cluster_ot(gammas_k, labs_ind)
-                labt_pred_hot = classify_1nn(xs, bary_map(total_gamma(gammas_k), xs), labs)
-                labt_pred_hot2 = classify_1nn(xs, map_from_clusters(xs, xt, gammas_k), labs)
-                # print(class_err_combined(labt, labt_pred_hot))
-                # print(class_err_combined(labt, labt_pred_hot2))
-                # print()
-                err += class_err_combined(labt, labt_pred_hot2)
-
-        err /= samples
-        print(err)
-        return err
+        # Compute hub OT
+        (xs, xt, labs, labt) = data
+        a = np.ones(xs.shape[0])/xs.shape[0]
+        b = np.ones(xt.shape[0])/xt.shape[0]
+        hot_ret = cluster_ot(a, b, xs, xt, k, k, [1.0, 1.0, 1.0], entr_reg,
+                relax_outside = [np.inf, np.inf],
+                warm_start = False,
+                inner_tol = 1e-4,
+                tol = 1e-3,
+                reduced_inner_tol = True,
+                inner_tol_start = 1e0,
+                max_iter = 300,
+                verbose = False,
+                entr_reg_start = 10000.0
+                )
+        if hot_ret is None:
+            return np.inf
+        else:
+            (zs1, zs2, a1, a2, gammas_k) = hot_ret
+            # labt_pred_hot = classify_cluster_ot(gammas_k, labs_ind)
+            labt_pred_hot = classify_1nn(xs, bary_map(total_gamma(gammas_k), xs), labs)
+            labt_pred_hot2 = classify_1nn(xs, map_from_clusters(xs, xt, gammas_k), labs)
+            # print(class_err_combined(labt, labt_pred_hot))
+            # print(class_err_combined(labt, labt_pred_hot2))
+            # print()
+            return [class_err_combined(labt, labt_pred_hot), class_err_combined(labt, labt_pred_hot2)]
     
-    hot_params = opt_grid(hot_err, entr_regs, ks, [samples_train], [True])
-
     # k barycenter
-    def kbary_err(params):
-        (entr_reg, k, samples, train) = params
+    def kbary_err(data, params):
+        (entr_reg, k) = params
         print("Running k barycenter for {}".format(params))
-        err = 0.0
-        for sample in range(samples):
-            # k barycenter OT
-            (xs, xt, labs, labt, labs_ind) = get_data(train, sample)
-            a = np.ones(xs.shape[0])/xs.shape[0]
-            b = np.ones(xt.shape[0])/xt.shape[0]
-            kbary_ret = kbarycenter(a, b, xs, xt, k, [1.0, 1.0], entr_reg, warm_start = False, max_iter = 300)
-            if kbary_ret is None:
-                err += np.inf
-            else:
-                (zs, gammas) = kbary_ret
-                # labt_pred_kb = classify_kbary(gammas, labs_ind)
-                labt_pred_kb = classify_1nn(xs, bary_map(total_gamma(gammas), xs), labs)
-                labt_pred_kb2 = classify_1nn(xs, map_from_clusters(xs, xt, gammas), labs)
-                # print(class_err_combined(labt, labt_pred_kb))
-                # print(class_err_combined(labt, labt_pred_kb2))
-                # print()
-                err += class_err_combined(labt, labt_pred_kb)
-
-        err /= samples
-        print(err)
-        return err
+        # k barycenter OT
+        (xs, xt, labs, labt) = data
+        a = np.ones(xs.shape[0])/xs.shape[0]
+        b = np.ones(xt.shape[0])/xt.shape[0]
+        kbary_ret = kbarycenter(a, b, xs, xt, k, [1.0, 1.0], entr_reg, warm_start = False, max_iter = 300)
+        if kbary_ret is None:
+            return np.inf
+        else:
+            (zs, gammas) = kbary_ret
+            # labt_pred_kb = classify_kbary(gammas, labs_ind)
+            labt_pred_kb = classify_1nn(xs, bary_map(total_gamma(gammas), xs), labs)
+            labt_pred_kb2 = classify_1nn(xs, map_from_clusters(xs, xt, gammas), labs)
+            # print(class_err_combined(labt, labt_pred_kb))
+            # print(class_err_combined(labt, labt_pred_kb2))
+            # print()
+            return [class_err_combined(labt, labt_pred_kb), class_err_combined(labt, labt_pred_kb)]
     
-    kb_params = opt_grid(kbary_err, entr_regs, ks, [samples_train], [True])
-
     # Group lasso
-    def gl_ot_err(params):
-        (entr_reg, eta, samples, train) = params
+    def gl_ot_err(data, params):
+        (xs, xt, labs, labt) = data
+        # (entr_reg, eta, samples, train) = params
+        (entr_reg, eta) = params
         print("Running group lasso for {}".format(params))
-        err = 0.0
-        for sample in range(samples):
-            (xs, xt, labs, labt, labs_ind) = get_data(train, sample)
+        try:
+            warnings.filterwarnings("error")
+            gamma_gl = ot.da.SinkhornL1l2Transport(reg_e=entr_reg, reg_cl=eta).fit(Xs = xs, ys = labs, Xt = xt).coupling_
+            # labt_pred_gl = classify_ot(gamma_gl, labs_ind, labs)
+            labt_pred_gl = classify_1nn(xs, bary_map(gamma_gl, xs), labs)
+            return class_err_combined(labt, labt_pred_gl)
+        except RuntimeWarning:
+            return np.inf
+        finally:
+            warnings.filterwarnings("default")
 
-            # Compute group lasso regularized OT
-            # gamma_gl = ot.da.SinkhornLpl1Transport(reg_e=1e2, reg_cl=1e0).fit(Xs = xs, ys = labs, Xt = xt).coupling_
-            try:
-                gamma_gl = ot.da.SinkhornL1l2Transport(reg_e=entr_reg, reg_cl=eta).fit(Xs = xs, ys = labs, Xt = xt).coupling_
-                # labt_pred_gl = classify_ot(gamma_gl, labs_ind, labs)
-                labt_pred_gl = classify_1nn(xs, bary_map(gamma_gl, xs), labs)
-                err += class_err_combined(labt, labt_pred_gl)
-            except RuntimeWarning:
-                err += np.inf
-
-        err /= samples
-        print(err)
-        return err
-    
-    gl_ot_params = opt_grid(gl_ot_err, entr_regs, gl_params, [samples_train], [True])
-    opt_params = {
-            "ot": ot_params,
-            "kmeans_ot": kmeans_ot_params,
-            "hot": hot_params,
-            "kbary": kb_params,
-            "gl": gl_ot_params
+    estimator_functions = {
+            "ot": ot_err,
+            "ot_entr": ot_entr_err,
+            "ot_kmeans": kmeans_ot_err,
+            "ot_2kbary": hot_err,
+            "ot_kbary": kbary_err,
+            "ot_gl": gl_ot_err,
             }
 
-    # Change to testing
-    for var in opt_params.values():
-        var[-2] = samples_test
-        var[-1] = False
 
-    error_dict = {}
-    error_dict["ot"] = ot_err(ot_params)
-    error_dict["kmeans_ot"] = kmeans_ot_err(kmeans_ot_params)
-    error_dict["hot"] = hot_err(hot_params)
-    error_dict["kbary"] = kbary_err(kb_params)
-    error_dict["gl"] = gl_ot_err(gl_ot_params)
-    print(error_dict)
+    estimator_outlen = {
+            "ot_2kbary": 2,
+            "ot_kbary": 2,
+            }
+
+    # Training
+    est_train_results = {}
+    est_test_results = {}
+    skip_entr_reg = {}
+
+    # Prepare arrays
+    for (est_name, est_params) in estimators.items():
+        parameters = est_params["parameter_ranges"]
+        param_lens = list(map(len, parameters))
+        outlen = estimator_outlen.get(est_params["function"], None)
+        if outlen is not None:
+            est_train_results[est_name] = np.empty((*param_lens, outlen, samples_train))
+            est_test_results[est_name] = np.empty((outlen, samples_test))
+        else:
+            est_train_results[est_name] = np.empty((*param_lens, samples_train))
+            est_test_results[est_name] = np.empty(samples_test)
+        skip_entr_reg[est_name] = []
+
+    # Run training
+    for sample in range(samples_train):
+        t0 = time.time()
+        print("Training sample: {}/{}".format(sample+1, samples_train))
+        (xs, xt, labs, labt) = get_data(True, sample)
+        for (est_name, est_params) in estimators.items():
+            parameters = est_params["parameter_ranges"]
+            param_lens = list(map(len, parameters))
+            est_fun = estimator_functions[est_params["function"]]
+            for comb_ind in itertools.product(*map(range, param_lens)):
+                cur_params = [parameters[i][comb_ind[i]] for i in range(len(parameters))]
+                if len(cur_params) > 0 and cur_params[0] in skip_entr_reg[est_name]:
+                    continue
+                err = est_fun((xs, xt, labs, labt), cur_params)
+                outlen = estimator_outlen.get(est_params["function"], None)
+                if err == np.inf:
+                    skip_entr_reg[est_name].append(cur_params[0])
+                    est_train_results[est_name][comb_ind[0],...] = np.inf
+                else:
+                    if outlen is not None:
+                        est_train_results[est_name][(*comb_ind, slice(None), sample)] = err
+                    else:
+                        est_train_results[est_name][(*comb_ind, sample)] = err
+        print("Time: {:.2f}s".format(time.time()-t0))
+
+    # Pick best parameters
+    est_train_err = {}
+    opt_params = {}
+    for (est_name, est_params) in estimators.items():
+        outlen = estimator_outlen.get(est_params["function"], None)
+        if outlen is not None:
+            est_train_err[est_name] = np.mean(est_train_results[est_name], axis = -1)
+            opt_params[est_name] = []
+            for j in range(outlen):
+                err_mat = est_train_err[est_name][...,j]
+                opt_ind = np.unravel_index(np.argmin(err_mat), err_mat.shape)
+                opt_params[est_name].append([est_params["parameter_ranges"][i][opt_ind[i]] for i in range(len(opt_ind))])
+        else:
+            est_train_err[est_name] = np.mean(est_train_results[est_name], axis = -1)
+            opt_ind = np.unravel_index(np.argmin(est_train_err[est_name]), est_train_err[est_name].shape)
+            opt_params[est_name] = [est_params["parameter_ranges"][i][opt_ind[i]] for i in range(len(opt_ind))]
+
+    # Run tests
+    for sample in range(samples_test):
+        t0 = time.time()
+        print("Testing sample: {}/{}".format(sample+1, samples_test))
+        (xs, xt, labs, labt) = get_data(False, sample)
+        for (est_name, est_params) in estimators.items():
+            outlen = estimator_outlen.get(est_params["function"], None)
+            est_fun = estimator_functions[est_params["function"]]
+            cur_params = opt_params[est_name]
+            if outlen is not None:
+                for j in range(outlen):
+                    err = est_fun((xs, xt, labs, labt), cur_params[j])[j]
+                    est_test_results[est_name][j, sample] = err
+            else:
+                err = est_fun((xs, xt, labs, labt), cur_params)
+                est_test_results[est_name][sample] = err
+        print("Time for sample: {:.2f}".format(time.time() - t0))
+
+    # # Change to testing
+    # for var in opt_params.values():
+    #     var[-2] = samples_test
+    #     var[-1] = False
+
+    # error_dict = {}
+    # if "ot" in estimators:
+    #     error_dict["ot"] = ot_err(opt_params["ot"])
+    # if "kmeans_ot" in estimators:
+    #     error_dict["kmeans_ot"] = kmeans_ot_err(opt_params["kmeans_ot"])
+    # if "hot" in estimators:
+    #     error_dict["hot"] = hot_err(opt_params["hot"])
+    # if "kbary" in estimators:
+    #     error_dict["kbary"] = kbary_err(opt_params["kbary"])
+    # if "gl_ot" in estimators:
+    #     error_dict["gl_ot"] = gl_ot_err(opt_params["gl_ot"])
+    # print(error_dict)
 
     with open(sim_params["outfile"], 'wb') as outfile:
-        pickle.dump([sim_params, opt_params, error_dict], outfile)
+        pickle.dump({
+            "params": sim_params,
+            "train": est_train_results,
+            "test": est_test_results,
+            } , outfile)
 
 def test_opt_grid():
     global ret, a, b
@@ -1182,6 +1315,107 @@ def test_opt_grid():
 #     ot.plot.plot2D_samples_mat(zs, xt, gammas[1], c=[.5, .5, .5])
 #     pl.show()
 
+def test_caltech_office():
+    global domain_data, data_ind, labels
+
+    # Adjust
+    source_name = "amazon"
+    target_name = "caltech10"
+    # features_name = "CaffeNet4096"
+    features_name = "GoogleNet1024"
+    outfile = "caltech_google_ama_to_cal.bin"
+
+    perclass = {"source": 20, "target": 1000}
+    samples = {"train": 10, "test": 10}
+
+    entr_regs = np.array([10.0])**range(-3, 5)
+    gl_params = np.array([10.0])**range(-3, 5)
+    ks = np.array([2])**range(1, 8)
+    # entr_regs = np.array([10.0, 100.0])
+    # gl_params = np.array([10.0])**range(-3, 5)
+    # ks = np.array([2])**range(3, 6)
+
+    estimators = {
+            "ot_gl": {
+                "function": "ot_gl",
+                "parameter_ranges": [entr_regs, gl_params]
+                },
+            "ot": {
+                "function": "ot",
+                "parameter_ranges": []
+                },
+            "ot_entr": {
+                "function": "ot_entr",
+                "parameter_ranges": [entr_regs]
+                },
+            "ot_kmeans": {
+                "function": "ot_kmeans",
+                "parameter_ranges": [entr_regs, ks]
+                },
+            "ot_2kbary": {
+                "function": "ot_2kbary",
+                "parameter_ranges": [entr_regs, ks]
+                },
+            "ot_kbary": {
+                "function": "ot_kbary",
+                "parameter_ranges": [entr_regs, ks]
+            }
+            }
+
+    domain_names = ["amazon", "caltech10", "dslr", "webcam"]
+    domain_data = {}
+
+    for name in domain_names:
+        data = loadmat(os.path.join(".", "features", features_name, name + ".mat"))
+        features = data['fts'].astype(float)
+        if features_name == "surf":
+            features = features / np.sum(features, 1).reshape(-1, 1)
+        features = preprocessing.scale(features)
+        labels = data['labels'].ravel()
+        domain_data[name] = {"features": features, "labels": labels}
+
+    # Prepare data splits
+    data_ind = {"train": {}, "test": {}}
+    features = {"source": domain_data[source_name]["features"],
+            "target": domain_data[target_name]["features"]}
+    labels = {"source": domain_data[source_name]["labels"],
+            "target": domain_data[target_name]["labels"]}
+    labels_unique = {k: np.unique(v) for (k, v) in labels.items()}
+
+    for data_type in ["train", "test"]:
+        for dataset in ["source", "target"]:
+            data_ind[data_type][dataset] = []
+            for sample in range(samples[data_type]):
+                ind_list = []
+                data_ind[data_type][dataset].append(ind_list)
+                lab = labels[dataset]
+                for c in labels_unique[dataset]:
+                    ind = np.argwhere(lab == c).ravel()
+                    np.random.shuffle(ind)
+                    ind_list.extend(ind[:min(perclass[dataset], len(ind))])
+
+    def get_data(train, sample):
+        trainstr = "train" if train else "test"
+        xs = features["source"][data_ind[trainstr]["source"][sample], :]
+        xt = features["target"][data_ind[trainstr]["target"][sample], :]
+        labs = labels["source"][data_ind[trainstr]["source"][sample]]
+        labt = labels["target"][data_ind[trainstr]["target"][sample]]
+        # labs_ind =  calc_lab_ind(labs)
+        # return (xs, xt, labs, labt, labs_ind)
+        return (xs, xt, labs, labt)
+
+    simulation_params = {
+            "entr_regs": entr_regs,
+            "gl_params": gl_params,
+            "ks": ks,
+            "samples_test": samples["test"],
+            "samples_train": samples["train"],
+            "outfile": outfile,
+            "estimators": estimators
+            }
+
+    test_domain_adaptation(simulation_params, get_data)
+
 if __name__ == "__main__":
     # test_split_data_gaussian()
     # test_split_data_uniform()
@@ -1191,7 +1425,8 @@ if __name__ == "__main__":
     # print("Time for moons: {}".format(time.time() - t0))
     # test_opt_grid()
     # test_moons_kplot()
-    test_satija()
+    # test_satija()
+    test_caltech_office()
 
 
     ### Barycenter histogram test
