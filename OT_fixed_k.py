@@ -1300,6 +1300,8 @@ def test_domain_adaptation(sim_params, get_data):
         for (est_name, est_params) in estimators.items():
             parameters = est_params["parameter_ranges"]
             param_lens = list(map(len, parameters))
+            if len(param_lens) == 0:
+                continue
             est_fun = estimator_functions[est_params["function"]]
             for comb_ind in itertools.product(*map(range, param_lens)):
                 cur_params = [parameters[i][comb_ind[i]] for i in range(len(parameters))]
@@ -1321,6 +1323,10 @@ def test_domain_adaptation(sim_params, get_data):
     est_train_err = {}
     opt_params = {}
     for (est_name, est_params) in estimators.items():
+        parameters = est_params["parameter_ranges"]
+        param_lens = list(map(len, parameters))
+        if len(param_lens) == 0:
+            opt_params[est_name] = []
         outlen = estimator_outlen.get(est_params["function"], None)
         if outlen is not None:
             est_train_err[est_name] = np.mean(est_train_results[est_name], axis = -1)
