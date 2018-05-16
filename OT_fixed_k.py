@@ -1330,7 +1330,8 @@ def test_caltech_office():
 
     entr_regs = np.array([10.0])**range(-3, 5)
     gl_params = np.array([10.0])**range(-3, 5)
-    ks = np.array([2])**range(1, 8)
+    # ks = np.array([2])**range(1, 8)
+    ks = np.array([10, 20, 30, 40, 50, 60, 70, 80])
     # entr_regs = np.array([10.0, 100.0])
     # gl_params = np.array([10.0])**range(-3, 5)
     # ks = np.array([2])**range(3, 6)
