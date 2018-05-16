@@ -11,6 +11,8 @@ df = pd.read_csv(infile, ",")
 bigmat = df.as_matrix()
 
 protocols = ["CELseq", "SmartSeq2"]
+studies = ["GSE81076","GSE85241","GSE86473","E-MTAB-5061"]
+
 labels = ["Alpha", "Beta", "Gamma", "Delta"]
 
 lab_ind = np.hstack([np.argwhere(bigmat[:, 1] == l).ravel() for l in labels])
@@ -23,8 +25,8 @@ for (cind, c) in enumerate(labels):
 # studies = np.unique(bigmat[:,3])
 x = []
 lab = []
-for (prot_ind, prot) in enumerate(protocols):
-    ind_cur = np.argwhere(bigmat[:,2] == prot).ravel()
+for study in studies:
+    ind_cur = np.argwhere(bigmat[:,3] == study).ravel()
     print(ind_cur)
     x.append(bigmat[ind_cur, 4:].astype(float))
     lab.append(all_lab[ind_cur].astype(int))
@@ -34,9 +36,6 @@ for l in lab:
         print(np.mean(l == c))
     print()
 
-savemat(outfile, {
-    "xs": x[0],
-    "xt": x[1],
-    "labs": lab[0],
-    "labt": lab[1]
-    })
+outdict = {"x"+str(i): x[i] for i in range(len(x))}
+outdict.update({"lab"+str(i): lab[i] for i in range(len(lab))})
+savemat(outfile, outdict)

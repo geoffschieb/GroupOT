@@ -1713,10 +1713,10 @@ def test_bio_data():
 
     # data = loadmat(os.path.join(".", "MNN_haem_data.mat"))
     data = loadmat(os.path.join(".", "pancreas.mat"))
-    xs = data['xs'].astype(float)
-    xt = data['xt'].astype(float)
-    labs = data['labs'].ravel().astype(float)
-    labt = data['labt'].ravel().astype(float)
+    xs = data['x2'].astype(float)
+    xt = data['x3'].astype(float)
+    labs = data['lab2'].ravel().astype(float)
+    labt = data['lab3'].ravel().astype(float)
 
     # Prepare data splits
     data_ind = {"train": {}, "test": {}}
