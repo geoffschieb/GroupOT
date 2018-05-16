@@ -1686,8 +1686,8 @@ if __name__ == "__main__":
     # test_opt_grid()
     # test_moons_kplot()
     # test_satija()
-    # test_caltech_office()
-    test_bio_data()
+    test_caltech_office()
+    # test_bio_data()
 
 #     ### Barycenter histogram test
 
