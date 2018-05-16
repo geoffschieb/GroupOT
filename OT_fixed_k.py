@@ -352,7 +352,8 @@ def kbarycenter(b1, b2, xs, xt, k,
         reduced_inner_tol = False,
         inner_tol_fact = 0.1,
         inner_tol_start = 1e-3,
-        inner_tol_dec_every = 20
+        inner_tol_dec_every = 20,
+        entr_reg_start = 1000.0
         ):
 
     converged = False
@@ -387,7 +388,8 @@ def kbarycenter(b1, b2, xs, xt, k,
                 tol = inner_tol_actual,
                 max_iter = inner_max_iter,
                 warm_start = warm_start,
-                relax_outside = relax_outside)
+                relax_outside = relax_outside,
+                entr_reg_start = entr_reg_start)
 
         # Check for nans
         if gammas is None:
@@ -1402,6 +1404,148 @@ def test_opt_grid():
 #     ot.plot.plot2D_samples_mat(xs, zs, gammas[0], c=[.5, .5, 1])
 #     ot.plot.plot2D_samples_mat(zs, xt, gammas[1], c=[.5, .5, .5])
 #     pl.show()
+
+def test_bio_data():
+    global domain_data, data_ind, labels
+
+    # Adjust
+    tasks = [{
+        "source": "amazon", 
+        "target": "caltech10",
+        "features": "GoogleNet1024",
+        "perclass": {"source": 50, "target": 50},
+        "samples": {"train": 10, "test": 10}
+        }]
+    features_todo = ["GoogleNet1024"]
+    outfiles = ["caltech_google_ama_to_cal.bin"]
+
+    # Do all pairs, all features
+    domain_names = ["amazon", "caltech10", "dslr", "webcam"]
+    feature_names = ["GoogleNet1024", "CaffeNet4096", "surf"]
+
+    tasks = []
+    for source_name in domain_names:
+        for target_name in domain_names:
+            if source_name != target_name:
+                for feature_name in feature_names:
+                    tasks.append({
+                        "source": source_name,
+                        "target": target_name,
+                        "features": feature_name,
+                        "perclass": {"source": 40 if source_name != "dslr" else 8, "target": 40 if source_name != "dslr" else 8},
+                        "samples": {"train": 10, "test": 10},
+                        "outfile": "caltech_" + source_name + "_to_" + target_name + "_" + feature_name + ".bin"
+                        })
+
+    # entr_regs = np.array([10.0])**range(-3, 5)
+    entr_regs = np.array([10.0])**range(-3, 4)
+    gl_params = np.array([10.0])**range(-3, 5)
+    # ks = np.array([2])**range(1, 8)
+    ks = np.array([5, 10, 15, 20, 30, 40, 50, 60, 70, 80])
+
+    # entr_regs = np.array([10.0])
+    # gl_params = np.array([10.0])**range(4, 5)
+    # ks = np.array([2])**range(5, 6)
+
+    estimators = {
+            "ot_gl": {
+                "function": "ot_gl",
+                "parameter_ranges": [entr_regs, gl_params]
+                },
+            "ot": {
+                "function": "ot",
+                "parameter_ranges": []
+                },
+            "ot_entr": {
+                "function": "ot_entr",
+                "parameter_ranges": [entr_regs]
+                },
+            "ot_kmeans": {
+                "function": "ot_kmeans",
+                "parameter_ranges": [entr_regs, ks]
+                },
+            "ot_2kbary": {
+                "function": "ot_2kbary",
+                "parameter_ranges": [entr_regs, ks]
+                },
+            "ot_kbary": {
+                "function": "ot_kbary",
+                "parameter_ranges": [entr_regs, ks]
+            },
+            "noadj": {
+                "function": "noadj",
+                "parameter_ranges": []
+                },
+            "sa": {
+                "function": "sa",
+                "parameter_ranges": [ks]
+                },
+            "tca": {
+                "function": "tca",
+                "parameter_ranges": [ks]
+                },
+            "coral": {
+                "function": "coral",
+                "parameter_ranges": []
+                }
+            }
+
+    domain_data = {}
+    infile = "MNN_haem_data.txt"
+
+        print("-"*30)
+        print("Running tests for bio data")
+        print("-"*30)
+
+            data = loadmat(os.path.join(".", "features", features_name, name + ".mat"))
+            features = data['fts'].astype(float)
+            if features_name == "surf":
+                features = features / np.sum(features, 1).reshape(-1, 1)
+            features = preprocessing.scale(features)
+            labels = data['labels'].ravel()
+            domain_data[name] = {"features": features, "labels": labels}
+
+        # Prepare data splits
+        data_ind = {"train": {}, "test": {}}
+        features = {"source": domain_data[source_name]["features"],
+                "target": domain_data[target_name]["features"]}
+        labels = {"source": domain_data[source_name]["labels"],
+                "target": domain_data[target_name]["labels"]}
+        labels_unique = {k: np.unique(v) for (k, v) in labels.items()}
+
+        for data_type in ["train", "test"]:
+            for dataset in ["source", "target"]:
+                data_ind[data_type][dataset] = []
+                for sample in range(samples[data_type]):
+                    ind_list = []
+                    data_ind[data_type][dataset].append(ind_list)
+                    lab = labels[dataset]
+                    for c in labels_unique[dataset]:
+                        ind = np.argwhere(lab == c).ravel()
+                        np.random.shuffle(ind)
+                        ind_list.extend(ind[:min(perclass[dataset], len(ind))])
+
+        def get_data(train, sample):
+            trainstr = "train" if train else "test"
+            xs = features["source"][data_ind[trainstr]["source"][sample], :]
+            xt = features["target"][data_ind[trainstr]["target"][sample], :]
+            labs = labels["source"][data_ind[trainstr]["source"][sample]]
+            labt = labels["target"][data_ind[trainstr]["target"][sample]]
+            # labs_ind =  calc_lab_ind(labs)
+            # return (xs, xt, labs, labt, labs_ind)
+            return (xs, xt, labs, labt)
+
+        simulation_params = {
+                "entr_regs": entr_regs,
+                "gl_params": gl_params,
+                "ks": ks,
+                "samples_test": samples["test"],
+                "samples_train": samples["train"],
+                "outfile": outfile,
+                "estimators": estimators
+                }
+
+        test_domain_adaptation(simulation_params, get_data)
 
 def test_caltech_office():
     global domain_data, data_ind, labels
