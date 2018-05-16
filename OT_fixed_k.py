@@ -1412,14 +1412,14 @@ def test_opt_grid():
 #     pl.show()
 
 def test_bio_data():
-    global data_ind, labels
+    global data_ind, labels, xs, xt, labs, labt
 
     perclass = {"source": 100, "target": 300}
-    samples = {"train": 1, "test": 1}
+    samples = {"train": 20, "test": 20}
     outfile = "bio.bin"
 
     # entr_regs = np.array([10.0])**range(-3, 5)
-    entr_regs = np.array([10.0])**range(-3, 5)
+    entr_regs = np.array([10.0])**range(-4, 2)
     gl_params = np.array([10.0])**range(-3, 5)
     # ks = np.array([2])**range(1, 8)
     ks = np.array([5, 10, 15, 20, 30, 40, 50, 60, 70, 80])
@@ -1605,10 +1605,10 @@ def test_caltech_office():
                 "function": "tca",
                 "parameter_ranges": [ks]
                 },
-            "coral": {
-                "function": "coral",
-                "parameter_ranges": []
-                }
+            # "coral": {
+            #     "function": "coral",
+            #     "parameter_ranges": []
+            #     }
             }
 
     domain_data = {}
