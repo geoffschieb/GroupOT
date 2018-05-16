@@ -1674,7 +1674,11 @@ def test_caltech_office():
                 "estimators": estimators
                 }
 
-        test_domain_adaptation(simulation_params, get_data)
+        try:
+            test_domain_adaptation(simulation_params, get_data)
+        except:
+            print("An error occurred, contuinuing with next data set!")-
+
 
 if __name__ == "__main__":
     # test_split_data_gaussian()
