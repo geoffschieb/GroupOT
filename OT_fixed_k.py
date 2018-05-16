@@ -1645,7 +1645,8 @@ def test_bio_data():
     global data_ind, labels, xs, xt, labs, labt
 
     perclass = {"source": 20, "target": 20}
-    samples = {"train": 10, "test": 10}
+    samples = {"train": 1, "test": 1}
+    label_samples = [874, 262, 92, 57]
     outfile = "pancreas.bin"
 
     entr_regs = np.array([10.0])**range(-3, 4)
@@ -1726,6 +1727,7 @@ def test_bio_data():
             "target": labt}
     labels_unique = {k: np.unique(v) for (k, v) in labels.items()}
 
+
     for data_type in ["train", "test"]:
         for dataset in ["source", "target"]:
             data_ind[data_type][dataset] = []
@@ -1733,10 +1735,10 @@ def test_bio_data():
                 ind_list = []
                 data_ind[data_type][dataset].append(ind_list)
                 lab = labels[dataset]
-                for c in labels_unique[dataset]:
+                for c in sorted(labels_unique[dataset]):
                     ind = np.argwhere(lab == c).ravel()
                     np.random.shuffle(ind)
-                    ind_list.extend(ind[:min(perclass[dataset], len(ind))])
+                    ind_list.extend(ind[:label_samples[int(c)]])
 
     def get_data(train, sample):
         trainstr = "train" if train else "test"
