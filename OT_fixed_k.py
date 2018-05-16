@@ -1493,59 +1493,59 @@ def test_bio_data():
     domain_data = {}
     infile = "MNN_haem_data.txt"
 
-        print("-"*30)
-        print("Running tests for bio data")
-        print("-"*30)
+    print("-"*30)
+    print("Running tests for bio data")
+    print("-"*30)
 
-            data = loadmat(os.path.join(".", "features", features_name, name + ".mat"))
-            features = data['fts'].astype(float)
-            if features_name == "surf":
-                features = features / np.sum(features, 1).reshape(-1, 1)
-            features = preprocessing.scale(features)
-            labels = data['labels'].ravel()
-            domain_data[name] = {"features": features, "labels": labels}
+        data = loadmat(os.path.join(".", "features", features_name, name + ".mat"))
+        features = data['fts'].astype(float)
+        if features_name == "surf":
+            features = features / np.sum(features, 1).reshape(-1, 1)
+        features = preprocessing.scale(features)
+        labels = data['labels'].ravel()
+        domain_data[name] = {"features": features, "labels": labels}
 
-        # Prepare data splits
-        data_ind = {"train": {}, "test": {}}
-        features = {"source": domain_data[source_name]["features"],
-                "target": domain_data[target_name]["features"]}
-        labels = {"source": domain_data[source_name]["labels"],
-                "target": domain_data[target_name]["labels"]}
-        labels_unique = {k: np.unique(v) for (k, v) in labels.items()}
+    # Prepare data splits
+    data_ind = {"train": {}, "test": {}}
+    features = {"source": domain_data[source_name]["features"],
+            "target": domain_data[target_name]["features"]}
+    labels = {"source": domain_data[source_name]["labels"],
+            "target": domain_data[target_name]["labels"]}
+    labels_unique = {k: np.unique(v) for (k, v) in labels.items()}
 
-        for data_type in ["train", "test"]:
-            for dataset in ["source", "target"]:
-                data_ind[data_type][dataset] = []
-                for sample in range(samples[data_type]):
-                    ind_list = []
-                    data_ind[data_type][dataset].append(ind_list)
-                    lab = labels[dataset]
-                    for c in labels_unique[dataset]:
-                        ind = np.argwhere(lab == c).ravel()
-                        np.random.shuffle(ind)
-                        ind_list.extend(ind[:min(perclass[dataset], len(ind))])
+    for data_type in ["train", "test"]:
+        for dataset in ["source", "target"]:
+            data_ind[data_type][dataset] = []
+            for sample in range(samples[data_type]):
+                ind_list = []
+                data_ind[data_type][dataset].append(ind_list)
+                lab = labels[dataset]
+                for c in labels_unique[dataset]:
+                    ind = np.argwhere(lab == c).ravel()
+                    np.random.shuffle(ind)
+                    ind_list.extend(ind[:min(perclass[dataset], len(ind))])
 
-        def get_data(train, sample):
-            trainstr = "train" if train else "test"
-            xs = features["source"][data_ind[trainstr]["source"][sample], :]
-            xt = features["target"][data_ind[trainstr]["target"][sample], :]
-            labs = labels["source"][data_ind[trainstr]["source"][sample]]
-            labt = labels["target"][data_ind[trainstr]["target"][sample]]
-            # labs_ind =  calc_lab_ind(labs)
-            # return (xs, xt, labs, labt, labs_ind)
-            return (xs, xt, labs, labt)
+    def get_data(train, sample):
+        trainstr = "train" if train else "test"
+        xs = features["source"][data_ind[trainstr]["source"][sample], :]
+        xt = features["target"][data_ind[trainstr]["target"][sample], :]
+        labs = labels["source"][data_ind[trainstr]["source"][sample]]
+        labt = labels["target"][data_ind[trainstr]["target"][sample]]
+        # labs_ind =  calc_lab_ind(labs)
+        # return (xs, xt, labs, labt, labs_ind)
+        return (xs, xt, labs, labt)
 
-        simulation_params = {
-                "entr_regs": entr_regs,
-                "gl_params": gl_params,
-                "ks": ks,
-                "samples_test": samples["test"],
-                "samples_train": samples["train"],
-                "outfile": outfile,
-                "estimators": estimators
-                }
+    simulation_params = {
+            "entr_regs": entr_regs,
+            "gl_params": gl_params,
+            "ks": ks,
+            "samples_test": samples["test"],
+            "samples_train": samples["train"],
+            "outfile": outfile,
+            "estimators": estimators
+            }
 
-        test_domain_adaptation(simulation_params, get_data)
+    test_domain_adaptation(simulation_params, get_data)
 
 def test_caltech_office():
     global domain_data, data_ind, labels
