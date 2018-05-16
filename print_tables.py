@@ -1,13 +1,27 @@
 import pickle
 import numpy as np
 
-infile =  "caltech_google_ama_to_cal.bin"
-with open(infile, "rb") as f:
-    l = pickle.load(f)
+domain_names = ["amazon", "caltech10", "dslr", "webcam"]
+feature_names = ["GoogleNet1024", "CaffeNet4096", "surf"]
 
-for (k, v) in l["test"].items():
-    print("{}:".format(k))
-    if len(v.shape) == 1:
-        print(np.mean(v))
-    else:
-        print(np.mean(v, axis = 1))
+for source_name in domain_names:
+    for target_name in domain_names:
+        if source_name != target_name:
+            for feature_name in feature_names:
+                infile = "caltech_" + source_name + "_to_" + target_name + "_" + feature_name + ".bin"
+
+                print("-" * 30)
+                print("Results for:")
+                print("Source: {}".format(source_name))
+                print("Target: {}".format(target_name))
+                print("Features: {}".format(feature_name))
+                    
+                with open(infile, "rb") as f:
+                    l = pickle.load(f)
+
+                for (k, v) in l["test"].items():
+                    print("{}:".format(k))
+                    if len(v.shape) == 1:
+                        print(np.mean(v))
+                    else:
+                        print(np.mean(v, axis = 1))

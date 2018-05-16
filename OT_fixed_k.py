@@ -1068,7 +1068,7 @@ def test_domain_adaptation(sim_params, get_data):
 
     # Entropically regularized OT
     def ot_entr_err(data, params):
-        entr_reg = params
+        entr_reg = params[0]
         print("Running entr reg OT for {}".format(params))
         (xs, xt, labs, labt) = data
         # Compute OT mapping
@@ -1171,6 +1171,78 @@ def test_domain_adaptation(sim_params, get_data):
         finally:
             warnings.filterwarnings("default")
 
+    def no_adjust_err(data, params):
+        (xs, xt, labs, labt) = data
+        print("Running 1NN classifier")
+        labt_pred = classify_1nn(xs, xt, labs)
+        return class_err_combined(labt, labt_pred)
+
+    def subspace_align_err(data, params):
+        (xs, xt, labs, labt) = data
+        d = params[0]
+        print("Running subspace alignment with {}".format(d))
+        if d > max(xs.shape[0], xt.shape[0]):
+            return np.inf
+        # Subspace Alignment, described in:
+        # Unsupervised Visual Domain Adaptation Using Subspace Alignment, 2013,
+        # Fernando et al.
+        from sklearn.decomposition import PCA
+        pcaS = PCA(d).fit(xs)
+        pcaT = PCA(d).fit(xt)
+        XS = np.transpose(pcaS.components_)[:, :d]  # source subspace matrix
+        XT = np.transpose(pcaT.components_)[:, :d]  # target subspace matrix
+        Xa = XS.dot(np.transpose(XS)).dot(XT)  # align source subspace
+        sourceAdapted = xs.dot(Xa)  # project source in aligned subspace
+        targetAdapted = xt.dot(XT)  # project target in target subspace
+        labt_pred = classify_1nn(sourceAdapted, targetAdapted, labs)
+        return class_err_combined(labt, labt_pred)
+
+    def tca_err(data, params):
+        (xs, xt, labs, labt) = data
+        d = params[0]
+        print("Running subspace alignment with {}".format(d))
+        if d > max(xs.shape[0], xt.shape[0]):
+            return np.inf
+        # Domain adaptation via transfer component analysis. IEEE TNN 2011
+        Ns = xs.shape[0]
+        Nt = xt.shape[0]
+        L_ss = (1. / (Ns * Ns)) * np.full((Ns, Ns), 1)
+        L_st = (-1. / (Ns * Nt)) * np.full((Ns, Nt), 1)
+        L_ts = (-1. / (Nt * Ns)) * np.full((Nt, Ns), 1)
+        L_tt = (1. / (Nt * Nt)) * np.full((Nt, Nt), 1)
+        L_up = np.hstack((L_ss, L_st))
+        L_down = np.hstack((L_ts, L_tt))
+        L = np.vstack((L_up, L_down))
+        X = np.vstack((xs, xt))
+        K = np.dot(X, X.T)  # linear kernel
+        H = (np.identity(Ns+Nt)-1./(Ns+Nt)*np.ones((Ns + Nt, 1)) *
+             np.ones((Ns + Nt, 1)).T)
+        inv = np.linalg.pinv(np.identity(Ns + Nt) + K.dot(L).dot(K))
+        D, W = np.linalg.eigh(inv.dot(K).dot(H).dot(K))
+        W = W[:, np.argsort(-D)[:d]]  # eigenvectors of d highest eigenvalues
+        sourceAdapted = np.dot(K[:Ns, :], W)  # project source
+        targetAdapted = np.dot(K[Ns:, :], W)  # project target
+        labt_pred = classify_1nn(sourceAdapted, targetAdapted, labs)
+        return class_err_combined(labt, labt_pred)
+
+    def coral_err(data, params):
+        (xs, xt, labs, labt) = data
+        print("Running CORAL")
+        # Return of Frustratingly Easy Domain Adaptation. AAAI 2016
+        Cs = np.cov(xs, rowvar=False) + np.eye(xs.shape[1])
+        Ct = np.cov(xt, rowvar=False) + np.eye(xt.shape[1])
+        Cs = Cs + Cs.T
+        Ct = Ct + Ct.T
+        svdCs = np.linalg.svd(Cs)
+        svdCt = np.linalg.svd(Ct)
+        Ds = xs.dot((svdCs[0] * (svdCs[1]**(-1/2)).reshape(1, -1)).dot(svdCs[2]))
+        D2 = (svdCt[0] * (svdCt[1]**(-1/2)).reshape(1, -1)).dot(svdCt[2])
+        Ds = Ds.dot(D2)  # re-coloring with target covariance
+        sourceAdapted = Ds
+        targetAdapted = xt
+        labt_pred = classify_1nn(sourceAdapted, targetAdapted, labs)
+        return class_err_combined(labt, labt_pred)
+
     estimator_functions = {
             "ot": ot_err,
             "ot_entr": ot_entr_err,
@@ -1178,6 +1250,10 @@ def test_domain_adaptation(sim_params, get_data):
             "ot_2kbary": hot_err,
             "ot_kbary": kbary_err,
             "ot_gl": gl_ot_err,
+            "noadj": no_adjust_err,
+            "sa": subspace_align_err,
+            "tca": tca_err,
+            "coral": coral_err
             }
 
 
@@ -1257,7 +1333,9 @@ def test_domain_adaptation(sim_params, get_data):
             cur_params = opt_params[est_name]
             if outlen is not None:
                 for j in range(outlen):
-                    err = est_fun((xs, xt, labs, labt), cur_params[j])[j]
+                    err = est_fun((xs, xt, labs, labt), cur_params[j])
+                    if err != np.inf:
+                        err = err[j]
                     est_test_results[est_name][j, sample] = err
             else:
                 err = est_fun((xs, xt, labs, labt), cur_params)
@@ -1319,22 +1397,41 @@ def test_caltech_office():
     global domain_data, data_ind, labels
 
     # Adjust
-    source_name = "amazon"
-    target_name = "caltech10"
-    # features_name = "CaffeNet4096"
-    features_name = "GoogleNet1024"
-    outfile = "caltech_google_ama_to_cal.bin"
+    tasks = [{
+        "source": "amazon", 
+        "target": "caltech10",
+        "features": "GoogleNet1024",
+        "perclass": {"source": 50, "target": 50},
+        "samples": {"train": 10, "test": 10}
+        }]
+    features_todo = ["GoogleNet1024"]
+    outfiles = ["caltech_google_ama_to_cal.bin"]
 
-    perclass = {"source": 20, "target": 20}
-    samples = {"train": 10, "test": 10}
+    # Do all pairs, all features
+    domain_names = ["amazon", "caltech10", "dslr", "webcam"]
+    feature_names = ["GoogleNet1024", "CaffeNet4096", "surf"]
+
+    tasks = []
+    for source_name in domain_names:
+        for target_name in domain_names:
+            if source_name != target_name:
+                for feature_name in feature_names:
+                    tasks.append({
+                        "source": source_name,
+                        "target": target_name,
+                        "features": feature_name,
+                        "perclass": {"source": 40 if source_name != "dslr" else 8, "target": 40 if source_name != "dslr" else 8},
+                        "samples": {"train": 10, "test": 10},
+                        "outfile": "caltech_" + source_name + "_to_" + target_name + "_" + feature_name + ".bin"
+                        })
 
     entr_regs = np.array([10.0])**range(-3, 5)
     gl_params = np.array([10.0])**range(-3, 5)
     # ks = np.array([2])**range(1, 8)
-    ks = np.array([10, 20, 30, 40, 50, 60, 70, 80])
-    # entr_regs = np.array([10.0, 100.0])
-    # gl_params = np.array([10.0])**range(-3, 5)
-    # ks = np.array([2])**range(3, 6)
+    ks = np.array([5, 10, 15, 20, 30, 40, 50, 60, 70, 80])
+    # entr_regs = np.array([10.0])
+    # gl_params = np.array([10.0])**range(4, 5)
+    # ks = np.array([2])**range(5, 6)
 
     estimators = {
             "ot_gl": {
@@ -1360,62 +1457,89 @@ def test_caltech_office():
             "ot_kbary": {
                 "function": "ot_kbary",
                 "parameter_ranges": [entr_regs, ks]
-            }
+            },
+            "noadj": {
+                "function": "noadj",
+                "parameter_ranges": []
+                },
+            "sa": {
+                "function": "sa",
+                "parameter_ranges": [ks]
+                },
+            "tca": {
+                "function": "tca",
+                "parameter_ranges": [ks]
+                },
+            "coral": {
+                "function": "coral",
+                "parameter_ranges": []
+                }
             }
 
-    domain_names = ["amazon", "caltech10", "dslr", "webcam"]
     domain_data = {}
 
-    for name in domain_names:
-        data = loadmat(os.path.join(".", "features", features_name, name + ".mat"))
-        features = data['fts'].astype(float)
-        if features_name == "surf":
-            features = features / np.sum(features, 1).reshape(-1, 1)
-        features = preprocessing.scale(features)
-        labels = data['labels'].ravel()
-        domain_data[name] = {"features": features, "labels": labels}
+    for task in tasks:
+        source_name = task["source"]
+        target_name = task["target"]
+        features_name = task["features"]
+        perclass = task["perclass"]
+        samples = task["samples"]
+        outfile = task["outfile"]
 
-    # Prepare data splits
-    data_ind = {"train": {}, "test": {}}
-    features = {"source": domain_data[source_name]["features"],
-            "target": domain_data[target_name]["features"]}
-    labels = {"source": domain_data[source_name]["labels"],
-            "target": domain_data[target_name]["labels"]}
-    labels_unique = {k: np.unique(v) for (k, v) in labels.items()}
+        print("-"*30)
+        print("Running {} to {} using {}".format(source_name, target_name, features_name))
+        print("-"*30)
 
-    for data_type in ["train", "test"]:
-        for dataset in ["source", "target"]:
-            data_ind[data_type][dataset] = []
-            for sample in range(samples[data_type]):
-                ind_list = []
-                data_ind[data_type][dataset].append(ind_list)
-                lab = labels[dataset]
-                for c in labels_unique[dataset]:
-                    ind = np.argwhere(lab == c).ravel()
-                    np.random.shuffle(ind)
-                    ind_list.extend(ind[:min(perclass[dataset], len(ind))])
+        for name in domain_names:
+            data = loadmat(os.path.join(".", "features", features_name, name + ".mat"))
+            features = data['fts'].astype(float)
+            if features_name == "surf":
+                features = features / np.sum(features, 1).reshape(-1, 1)
+            features = preprocessing.scale(features)
+            labels = data['labels'].ravel()
+            domain_data[name] = {"features": features, "labels": labels}
 
-    def get_data(train, sample):
-        trainstr = "train" if train else "test"
-        xs = features["source"][data_ind[trainstr]["source"][sample], :]
-        xt = features["target"][data_ind[trainstr]["target"][sample], :]
-        labs = labels["source"][data_ind[trainstr]["source"][sample]]
-        labt = labels["target"][data_ind[trainstr]["target"][sample]]
-        # labs_ind =  calc_lab_ind(labs)
-        # return (xs, xt, labs, labt, labs_ind)
-        return (xs, xt, labs, labt)
+        # Prepare data splits
+        data_ind = {"train": {}, "test": {}}
+        features = {"source": domain_data[source_name]["features"],
+                "target": domain_data[target_name]["features"]}
+        labels = {"source": domain_data[source_name]["labels"],
+                "target": domain_data[target_name]["labels"]}
+        labels_unique = {k: np.unique(v) for (k, v) in labels.items()}
 
-    simulation_params = {
-            "entr_regs": entr_regs,
-            "gl_params": gl_params,
-            "ks": ks,
-            "samples_test": samples["test"],
-            "samples_train": samples["train"],
-            "outfile": outfile,
-            "estimators": estimators
-            }
+        for data_type in ["train", "test"]:
+            for dataset in ["source", "target"]:
+                data_ind[data_type][dataset] = []
+                for sample in range(samples[data_type]):
+                    ind_list = []
+                    data_ind[data_type][dataset].append(ind_list)
+                    lab = labels[dataset]
+                    for c in labels_unique[dataset]:
+                        ind = np.argwhere(lab == c).ravel()
+                        np.random.shuffle(ind)
+                        ind_list.extend(ind[:min(perclass[dataset], len(ind))])
 
-    test_domain_adaptation(simulation_params, get_data)
+        def get_data(train, sample):
+            trainstr = "train" if train else "test"
+            xs = features["source"][data_ind[trainstr]["source"][sample], :]
+            xt = features["target"][data_ind[trainstr]["target"][sample], :]
+            labs = labels["source"][data_ind[trainstr]["source"][sample]]
+            labt = labels["target"][data_ind[trainstr]["target"][sample]]
+            # labs_ind =  calc_lab_ind(labs)
+            # return (xs, xt, labs, labt, labs_ind)
+            return (xs, xt, labs, labt)
+
+        simulation_params = {
+                "entr_regs": entr_regs,
+                "gl_params": gl_params,
+                "ks": ks,
+                "samples_test": samples["test"],
+                "samples_train": samples["train"],
+                "outfile": outfile,
+                "estimators": estimators
+                }
+
+        test_domain_adaptation(simulation_params, get_data)
 
 if __name__ == "__main__":
     # test_split_data_gaussian()
