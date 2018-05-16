@@ -1676,6 +1676,9 @@ def test_caltech_office():
 
         try:
             test_domain_adaptation(simulation_params, get_data)
+        except KeyboardInterrupt:
+            print("Canceled")
+            break
         except:
             print("An error occurred, contuinuing with next data set!")-
 
