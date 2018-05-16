@@ -1497,13 +1497,13 @@ def test_bio_data():
     print("Running tests for bio data")
     print("-"*30)
 
-        data = loadmat(os.path.join(".", "features", features_name, name + ".mat"))
-        features = data['fts'].astype(float)
-        if features_name == "surf":
-            features = features / np.sum(features, 1).reshape(-1, 1)
-        features = preprocessing.scale(features)
-        labels = data['labels'].ravel()
-        domain_data[name] = {"features": features, "labels": labels}
+    data = loadmat(os.path.join(".", "MNN", features_name, name + ".mat"))
+    features = data['fts'].astype(float)
+    if features_name == "surf":
+        features = features / np.sum(features, 1).reshape(-1, 1)
+    features = preprocessing.scale(features)
+    labels = data['labels'].ravel()
+    domain_data[name] = {"features": features, "labels": labels}
 
     # Prepare data splits
     data_ind = {"train": {}, "test": {}}
