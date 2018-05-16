@@ -28,8 +28,8 @@ noisy_data = [((1-alpha)*future_noisy_data[0] + alpha* np.random.randn(num_noisy
 
 # Classify at each noise level using clean data
 
-samples_test = 10
-samples_train = 10
+samples_test = num_clean_samples//2
+samples_train = num_clean_samples//2
 entr_regs = np.array([10.0])**(-3,5)
 gl_params = np.array([10.0])**(-3,5)
 ks =  np.array([2])**range(1,8)
