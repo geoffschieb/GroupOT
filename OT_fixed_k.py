@@ -1113,8 +1113,8 @@ def test_domain_adaptation(sim_params, get_data):
         hot_ret = cluster_ot(a, b, xs, xt, k, k, [1.0, 1.0, 1.0], entr_reg,
                 relax_outside = [np.inf, np.inf],
                 warm_start = False,
-                inner_tol = 1e-4,
-                tol = 1e-3,
+                inner_tol = 1e-5,
+                tol = 1e-4,
                 reduced_inner_tol = True,
                 inner_tol_start = 1e0,
                 max_iter = 300,
@@ -1141,7 +1141,17 @@ def test_domain_adaptation(sim_params, get_data):
         (xs, xt, labs, labt) = data
         a = np.ones(xs.shape[0])/xs.shape[0]
         b = np.ones(xt.shape[0])/xt.shape[0]
-        kbary_ret = kbarycenter(a, b, xs, xt, k, [1.0, 1.0], entr_reg, warm_start = False, max_iter = 300)
+        kbary_ret = kbarycenter(a, b, xs, xt, k, [1.0, 1.0],
+                entr_reg,
+                warm_start = False,
+                tol = 1e-4,
+                inner_tol = 1e-5,
+                reduced_inner_tol = True,
+                inner_tol_start = 1e0,
+                max_iter = 300,
+                verbose = False,
+                entr_reg_start = 10000.0
+                )
         if kbary_ret is None:
             return np.inf
         else:
@@ -1200,7 +1210,7 @@ def test_domain_adaptation(sim_params, get_data):
     def tca_err(data, params):
         (xs, xt, labs, labt) = data
         d = params[0]
-        print("Running subspace alignment with {}".format(d))
+        print("Running Transfer Component Analysis with {}".format(d))
         if d > max(xs.shape[0], xt.shape[0]):
             return np.inf
         # Domain adaptation via transfer component analysis. IEEE TNN 2011
@@ -1425,10 +1435,12 @@ def test_caltech_office():
                         "outfile": "caltech_" + source_name + "_to_" + target_name + "_" + feature_name + ".bin"
                         })
 
-    entr_regs = np.array([10.0])**range(-3, 5)
+    # entr_regs = np.array([10.0])**range(-3, 5)
+    entr_regs = np.array([10.0])**range(-3, 4)
     gl_params = np.array([10.0])**range(-3, 5)
     # ks = np.array([2])**range(1, 8)
     ks = np.array([5, 10, 15, 20, 30, 40, 50, 60, 70, 80])
+
     # entr_regs = np.array([10.0])
     # gl_params = np.array([10.0])**range(4, 5)
     # ks = np.array([2])**range(5, 6)
