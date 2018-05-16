@@ -1165,7 +1165,7 @@ def test_domain_adaptation(sim_params, get_data):
             # print(class_err_combined(labt, labt_pred_kb))
             # print(class_err_combined(labt, labt_pred_kb2))
             # print()
-            return [class_err_combined(labt, labt_pred_kb), class_err_combined(labt, labt_pred_kb)]
+            return [class_err_combined(labt, labt_pred_kb), class_err_combined(labt, labt_pred_kb2)]
     
     # Group lasso
     def gl_ot_err(data, params):
@@ -1328,6 +1328,7 @@ def test_domain_adaptation(sim_params, get_data):
         param_lens = list(map(len, parameters))
         if len(param_lens) == 0:
             opt_params[est_name] = []
+            continue
         outlen = estimator_outlen.get(est_params["function"], None)
         if outlen is not None:
             est_train_err[est_name] = np.mean(est_train_results[est_name], axis = -1)
@@ -1338,6 +1339,9 @@ def test_domain_adaptation(sim_params, get_data):
                 opt_params[est_name].append([est_params["parameter_ranges"][i][opt_ind[i]] for i in range(len(opt_ind))])
         else:
             est_train_err[est_name] = np.mean(est_train_results[est_name], axis = -1)
+            print(est_name)
+            print(est_train_err[est_name].shape)
+            print(np.argmin(est_train_err[est_name]))
             opt_ind = np.unravel_index(np.argmin(est_train_err[est_name]), est_train_err[est_name].shape)
             opt_params[est_name] = [est_params["parameter_ranges"][i][opt_ind[i]] for i in range(len(opt_ind))]
 
