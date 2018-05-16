@@ -1716,8 +1716,8 @@ def test_bio_data():
     data = loadmat(os.path.join(".", "pancreas.mat"))
     xs = data['x2'].astype(float)
     xt = data['x3'].astype(float)
-    labs = data['lab2'].ravel().astype(float)
-    labt = data['lab3'].ravel().astype(float)
+    labs = data['lab2'].ravel().astype(int)
+    labt = data['lab3'].ravel().astype(int)
 
     # Prepare data splits
     data_ind = {"train": {}, "test": {}}
@@ -1726,7 +1726,6 @@ def test_bio_data():
     labels = {"source": labs,
             "target": labt}
     labels_unique = {k: np.unique(v) for (k, v) in labels.items()}
-
 
     for data_type in ["train", "test"]:
         for dataset in ["source", "target"]:
@@ -1738,6 +1737,7 @@ def test_bio_data():
                 for c in sorted(labels_unique[dataset]):
                     ind = np.argwhere(lab == c).ravel()
                     np.random.shuffle(ind)
+                    # ind_list.extend(ind[:min(perclass[dataset], len(ind)])
                     ind_list.extend(ind[:label_samples[int(c)]])
 
     def get_data(train, sample):
