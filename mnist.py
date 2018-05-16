@@ -10,7 +10,7 @@ np.random.seed(1)
 
 
 
-num_clean_samples = 1000 # number of images in dataset without noise
+num_clean_samples = 6000 # number of images in dataset without noise
 num_noisy_samples = num_clean_samples
 
 clean_data = mnist.train.next_batch(num_clean_samples)
@@ -28,8 +28,8 @@ noisy_data = [((1-alpha)*future_noisy_data[0] + alpha* np.random.randn(num_noisy
 
 # Classify at each noise level using clean data
 
-samples_test = 1
-samples_train = 1
+samples_test = 5
+samples_train = samples_test
 entr_regs = np.array([10.0])**(-3,5)
 gl_params = np.array([10.0])**(-3,5)
 ks =  np.array([2])**range(1,8)
@@ -92,8 +92,8 @@ for target in noisy_data:
 
     print("Noise level: alpha = {}".format(target[2]))
     def get_data(train, i):
-        start_index = 0
-        num_samples = num_clean_samples//2
+        num_samples = 500
+        start_index = i*num_samples*2
         if train:
             start_index = start_index + num_samples
 
