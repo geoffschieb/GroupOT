@@ -2001,7 +2001,7 @@ if __name__ == "__main__":
     # test_gaussian_mixture()
     # test_split_data_uniform_vard()
     # test_split_data_uniform_vark()
-    test_split_data_uniform_varn()
+    # test_split_data_uniform_varn()
     # test_split_data_uniform_visual()
     # test_constraint_ot()
     # t0 = time.time()
@@ -2011,7 +2011,7 @@ if __name__ == "__main__":
     # test_moons_kplot()
     # test_satija()
     # test_caltech_office()
-    # test_bio_data()
+    test_bio_data()
     # test_bio_diag()
 
 #     ### Barycenter histogram test
