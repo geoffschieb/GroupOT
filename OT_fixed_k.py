@@ -1418,15 +1418,15 @@ def test_bio_data():
     samples = {"train": 1, "test": 1}
     outfile = "bio.bin"
 
-    # # entr_regs = np.array([10.0])**range(-3, 5)
-    # entr_regs = np.array([10.0])**range(-3, 4)
-    # gl_params = np.array([10.0])**range(-3, 5)
-    # # ks = np.array([2])**range(1, 8)
-    # ks = np.array([5, 10, 15, 20, 30, 40, 50, 60, 70, 80])
+    # entr_regs = np.array([10.0])**range(-3, 5)
+    entr_regs = np.array([10.0])**range(-3, 5)
+    gl_params = np.array([10.0])**range(-3, 5)
+    # ks = np.array([2])**range(1, 8)
+    ks = np.array([5, 10, 15, 20, 30, 40, 50, 60, 70, 80])
 
-    entr_regs = np.array([10.0])
-    gl_params = np.array([10.0])**range(4, 5)
-    ks = np.array([2])**range(5, 6)
+    # entr_regs = np.array([10.0])
+    # gl_params = np.array([10.0])**range(4, 5)
+    # ks = np.array([2])**range(5, 6)
 
     estimators = {
             "ot_gl": {
