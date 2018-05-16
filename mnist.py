@@ -28,8 +28,8 @@ noisy_data = [((1-alpha)*future_noisy_data[0] + alpha* np.random.randn(num_noisy
 
 # Classify at each noise level using clean data
 
-samples_test = num_clean_samples//2
-samples_train = num_clean_samples//2
+samples_test = 1
+samples_train = 1
 entr_regs = np.array([10.0])**(-3,5)
 gl_params = np.array([10.0])**(-3,5)
 ks =  np.array([2])**range(1,8)
@@ -90,13 +90,13 @@ sim_params = {
 for target in noisy_data:
     sim_params["outfile"] = "mnist_results_" + str(target[2]) + ".bin"
 
-    
+    print("Noise level: alpha = {}".format(target[2]))
     def get_data(train, i):
         start_index = 0
-        num_samples = samples_test
+        num_samples = num_clean_samples//2
         if train:
-            start_index = start_index + samples_test
-            num_samples = samples_train
+            start_index = start_index + num_samples
+
 
         xs = clean_data[0][start_index:(start_index+num_samples)]
         xt = target[0][start_index:(start_index+num_samples)]
