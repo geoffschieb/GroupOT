@@ -664,28 +664,78 @@ def class_err_combined(labt, labt_pred):
 #             results[i] = eval_proc()
 
 
-def test_split_data_gaussian():
-    d = 100
-    n_per_cluster = 100
+def test_gaussian_mixture():
+    global xs, xt
+
     n_cluster = 4
-    directions = np.random.normal(0, 3, (n_cluster, d))
+    k = 12
+    # prp = np.random.uniform(size = n_cluster)
+    # prp /= np.sum(prp)
+    prp = np.array([0.1, 0.2, 0.3, 0.4])
+    d = 50
+    ns = 1000
+    nt = 1000
+    spread = 1.0
+    variance = 1.0
+    entr_reg = 10.0
+
+    # # psd matrix
+    # A = np.random.normal(0, 1, (d, d))
+    # A = A.dot(A.T)
+    # print(A)
+    # def trafo(x):
+    #     return A.dot(x)
+
+    # # Random direction
+    # direction = np.random.normal(0, 10/np.sqrt(d), d)
+    # def trafo(x):
+    #     return x + direction
+
+    # Scaling
+    scale = 0.1
+    def trafo(x):
+        return scale * x
+
+    cluster_centers = np.random.normal(0, spread, (n_cluster, d))
     samples_target = []
     samples_source = []
-    for i in range(n_cluster):
-        samples_target.append(np.random.normal(0, 1, (n_per_cluster, d)) + directions[i, :])
-        samples_source.append(np.random.normal(0, 1, (n_per_cluster, d)) + 0.1 * directions[i, :])
+    cluster_ids = list(range(n_cluster))
+    for i in range(ns):
+        c = np.random.choice(cluster_ids, p = prp)
+        samples_source.append(cluster_centers[c,:] + np.random.normal(0, variance, (1, d)))
+    for i in range(nt):
+        c = np.random.choice(range(n_cluster), p = prp)
+        samples_target.append(cluster_centers[c,:] + np.random.normal(0, variance, (1, d)))
 
-    samples_target = np.vstack([samples for samples in samples_target])
-    samples_source = np.vstack([samples for samples in samples_source])
+    xs = np.vstack([samples for samples in samples_target])
+    xt = np.vstack([samples for samples in samples_source])
+    xt = np.apply_along_axis(trafo, 1, xt)
 
-    emb_dat = decomposition.PCA(n_components=2).fit_transform(np.vstack((samples_target,samples_source)))
-    pl.plot(emb_dat[0:samples_target.shape[0], 0], emb_dat[0:samples_target.shape[0], 1], '+b', label='Target samples')
-    pl.plot(emb_dat[samples_target.shape[0]:, 0], emb_dat[samples_target.shape[0]:, 1], 'xr', label='Source samples')
+    emb_dat = decomposition.PCA(n_components=2).fit_transform(np.vstack((xs,xt)))
+    xs_emb = emb_dat[:xs.shape[0],:]
+    xt_emb = emb_dat[xs.shape[0]:,:]
+    # xs_emb = xs
+    # xt_emb = xt
+
+    pl.plot(*xs_emb.T, 'xr', label='Source samples')
+    pl.plot(*xt_emb.T, '+b', label='Target samples')
     pl.show()
     
-    b1 = np.ones(samples_target.shape[0])/samples_target.shape[0]
-    b2 = np.ones(samples_source.shape[0])/samples_source.shape[0]
-    gamma_ot = ot.sinkhorn(b1, b2, ot.dist(samples_source, samples_target))
+    ground_truth = np.sum(prp.reshape(-1,1) * (np.apply_along_axis(trafo, 1, cluster_centers) - cluster_centers)**2)
+    print("Ground truth: {}".format(ground_truth))
+
+    b1 = np.ones(xs.shape[0])/xs.shape[0]
+    b2 = np.ones(xt.shape[0])/xt.shape[0]
+    M = ot.dist(xs, xt)
+    gamma_ot = ot.sinkhorn(b1, b2, M, entr_reg)
+    cost_sinkhorn = np.sum(gamma_ot * M)
+    print("Sinkhorn cost: {}".format(cost_sinkhorn))
+
+    (zs, gammas) = kbarycenter(b1, b2, xs, xt, k, [1.0, 1.0], 1, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf],
+            max_iter = 100)
+    # # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True)
+    bary_cost = estimate_w2_cluster(xs, xt, gammas)
+    print("Barycenter cost: {}".format(bary_cost))
 
 def test_split_data_uniform_vark():
     global ds, results_vanilla, results_kbary
@@ -745,10 +795,10 @@ def test_split_data_uniform_varn():
 
     # ks = np.hstack([range(1,11), range(12,31,2), range(34, 71, 4), range(70, 10, 101)]).astype(int)
     # ds = (np.array([2])**np.linspace(2, 8, 15)).astype(int)
-    d = 100
+    d = 10
     ns = (np.array([10.0])**np.linspace(1.7, 3, 20)).astype(int)
     samples = 20
-    k = 40
+    k = 10
     results_vanilla = np.empty((samples, len(ns)))
     results_kbary = np.empty((samples, len(ns)))
     for (n_ind, n) in enumerate(ns):
@@ -759,15 +809,18 @@ def test_split_data_uniform_varn():
             
             b1 = np.ones(samples_target.shape[0])/samples_target.shape[0]
             b2 = np.ones(samples_source.shape[0])/samples_source.shape[0]
-            cost = ot.sinkhorn2(b1, b2, ot.dist(samples_source, samples_target), 1)
+            cost = ot.emd2(b1, b2, ot.dist(samples_source, samples_target), 1)
             results_vanilla[sample, n_ind] = cost
             print("Sinkhorn: {}".format(cost))
 
             xs = samples_source
             xt = samples_target
 
-            print(samples_source.shape)
-            (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, k, [1.0, 1.0], 1, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf])
+            (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, k, [1.0, 1.0], 0.1, verbose = True,
+                    warm_start = True, relax_outside = [np.inf, np.inf],
+                    tol = 1e-4,
+                    inner_tol = 1e-5,
+                    max_iter = 500)
             # # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True)
             bary_cost = estimate_w2_cluster(samples_source, samples_target, gammas)
             results_kbary[sample, n_ind] = bary_cost
@@ -776,7 +829,7 @@ def test_split_data_uniform_varn():
     print(results_vanilla)
     print(results_kbary)
 
-    with open(os.path.join("uniform_results", "varn.bin"), "wb") as f:
+    with open(os.path.join("uniform_results", "varn6.bin"), "wb") as f:
         pickle.dump({
             "d": d,
             "ns": ns,
@@ -1337,7 +1390,7 @@ def test_domain_adaptation(sim_params, get_data):
             # print(class_err_combined(labt, labt_pred_kb))
             # print(class_err_combined(labt, labt_pred_kb2))
             # print()
-            return [expected_err, class_err_combined(labt, labt_pred_kb), class_err_combined(labt, labt_pred_kb)]
+            return [expected_err, class_err_combined(labt, labt_pred_kb), class_err_combined(labt, labt_pred_kb2)]
     
     # Group lasso
     def gl_ot_err(data, params):
@@ -1591,19 +1644,19 @@ def test_opt_grid():
 def test_bio_data():
     global data_ind, labels, xs, xt, labs, labt
 
-    perclass = {"source": 50, "target": 50}
+    perclass = {"source": 20, "target": 20}
     samples = {"train": 10, "test": 10}
-    outfile = "bio.bin"
+    outfile = "pancreas.bin"
 
+    entr_regs = np.array([10.0])**range(-3, 4)
     # entr_regs = np.array([10.0])**range(-2, 0)
-    # entr_regs = np.array([10.0])**range(-2, 0)
-    entr_regs = np.array([10.0])**range(-1, 0)
-    # gl_params = np.array([10.0])**range(-3, 5)
+    # entr_regs = np.array([10.0])**range(-1, 0)
+    gl_params = np.array([10.0])**range(-3, 5)
     # gl_params = np.array([10.0])**range(-3, 0)
-    gl_params = np.array([0.1])
+    # gl_params = np.array([0.1])
     # ks = np.array([2])**range(1, 8)
     # ks = np.array([5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100])
-    ks = np.array([5, 10, 15, 20])
+    ks = np.array([5, 10, 15, 20, 25, 30])
 
     # entr_regs = np.array([10.0])
     # gl_params = np.array([10.0])**range(4, 5)
@@ -1638,28 +1691,28 @@ def test_bio_data():
                 "function": "noadj",
                 "parameter_ranges": []
                 },
-            # "sa": {
-            #     "function": "sa",
-            #     "parameter_ranges": [ks]
-            #     },
-            # "tca": {
-            #     "function": "tca",
-            #     "parameter_ranges": [ks]
-            #     },
-            # "coral": {
-            #     "function": "coral",
-            #     "parameter_ranges": []
-            #     }
+            "sa": {
+                "function": "sa",
+                "parameter_ranges": [ks]
+                },
+            "tca": {
+                "function": "tca",
+                "parameter_ranges": [ks]
+                },
+            "coral": {
+                "function": "coral",
+                "parameter_ranges": []
+                }
             }
 
     domain_data = {}
-    infile = "MNN_haem_data.txt"
 
     print("-"*30)
     print("Running tests for bio data")
     print("-"*30)
 
-    data = loadmat(os.path.join(".", "MNN_haem_data.mat"))
+    # data = loadmat(os.path.join(".", "MNN_haem_data.mat"))
+    data = loadmat(os.path.join(".", "pancreas.mat"))
     xs = data['xs'].astype(float)
     xt = data['xt'].astype(float)
     labs = data['labs'].ravel().astype(float)
@@ -1945,10 +1998,10 @@ def test_caltech_office():
 
 
 if __name__ == "__main__":
-    # test_split_data_gaussian()
+    # test_gaussian_mixture()
     # test_split_data_uniform_vard()
     # test_split_data_uniform_vark()
-    # test_split_data_uniform_varn()
+    test_split_data_uniform_varn()
     # test_split_data_uniform_visual()
     # test_constraint_ot()
     # t0 = time.time()
@@ -1959,7 +2012,7 @@ if __name__ == "__main__":
     # test_satija()
     # test_caltech_office()
     # test_bio_data()
-    test_bio_diag()
+    # test_bio_diag()
 
 #     ### Barycenter histogram test
 
