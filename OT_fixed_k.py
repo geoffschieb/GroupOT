@@ -1680,7 +1680,7 @@ def test_caltech_office():
             print("Canceled")
             break
         except:
-            print("An error occurred, contuinuing with next data set!")-
+            print("An error occurred, contuinuing with next data set!")
 
 
 if __name__ == "__main__":
