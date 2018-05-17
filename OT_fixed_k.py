@@ -1664,10 +1664,10 @@ def test_bio_data():
     # ks = np.array([2])**range(5, 6)
 
     estimators = {
-            "ot_gl": {
-                "function": "ot_gl",
-                "parameter_ranges": [entr_regs, gl_params]
-                },
+            # "ot_gl": {
+            #     "function": "ot_gl",
+            #     "parameter_ranges": [entr_regs, gl_params]
+            #     },
             # "ot": {
             #     "function": "ot",
             #     "parameter_ranges": []
@@ -1843,7 +1843,7 @@ def test_bio_diag():
         })
 
 def test_bio_diag2():
-    global xs, xt, labs, labt
+    global xs, xt, labs, labt, emb
 
     samples = {"train": 1, "test": 1}
     label_samples = [874, 262, 92, 57]
@@ -1890,11 +1890,12 @@ def test_bio_diag2():
 
     (xs, xt, labs, labt) = get_data(True, 0)
     ns = xs.shape[0]
-    # emb = manifold.TSNE().fit_transform(np.vstack([xs]))
-    emb = decomposition.PCA(n_components = 2).fit_transform(np.vstack([xs]))
+    emb = manifold.TSNE().fit_transform(np.vstack([xs, xt]))
+    # emb = decomposition.PCA(n_components = 2).fit_transform(np.vstack([xs, xt]))
     colors = ["r", "b", "g", "k"]
-    pl.scatter(*emb[:ns,:].T, c = labs, cmap = pl.get_cmap("rainbow"))
-    # pl.show()
+    pl.scatter(*emb[:ns,:].T, c = labs, cmap = pl.get_cmap("jet"))
+    pl.scatter(*emb[ns:,:].T, c = labt, cmap = pl.get_cmap("jet"))
+    pl.show()
 
 def test_caltech_office():
     global domain_data, data_ind, labels
@@ -2067,9 +2068,9 @@ if __name__ == "__main__":
     # test_moons_kplot()
     # test_satija()
     # test_caltech_office()
-    test_bio_data()
+    # test_bio_data()
     # test_bio_diag()
-    # test_bio_diag2()
+    test_bio_diag2()
 
 #     ### Barycenter histogram test
 
