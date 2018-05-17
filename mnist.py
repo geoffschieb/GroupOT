@@ -7,9 +7,9 @@ from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 
 # sections to run
-load_data = True #load original MNIST data (needed to refit models)
-refit_models = True
-make_error_plot = False
+load_data = False #load original MNIST data (needed to refit models)
+refit_models = False
+make_error_plot = True
 make_data_plot = False
 
 
@@ -34,7 +34,7 @@ if load_data:
 
 
 
-    num_clean_samples = 15000 # number of images loaded without noise, for all train/test runs
+    num_clean_samples = 26000 # number of images loaded without noise, for all train/test runs
     num_noisy_samples = num_clean_samples
 
 
@@ -47,7 +47,7 @@ if load_data:
     # Prepare noisy_data by adding Gaussian noise at different levels
 
     # alphas to run
-    alphas = 0.05*np.array(range(13))
+    alphas = 0.03*np.array(range(21))
     
     noisy_data = [((1-alpha)*future_noisy_data[0] + alpha* np.random.randn(num_noisy_samples, dimensions), future_noisy_data[1], alpha) for alpha in alphas]
 
@@ -114,7 +114,7 @@ if load_data:
 
     if refit_models:
         for target in noisy_data:
-            sim_params["outfile"] = "mnist_results_" + str(target[2]) + ".bin"
+            sim_params["outfile"] = "mnist_results_25_{:.2f}.bin".format(target[2])
             
             print("Noise level: alpha = {}".format(target[2]))
             def get_data(train, i):
@@ -157,13 +157,14 @@ if make_error_plot:
     #first plot version
     #alphas = np.array([0.0,0.05,0.1,0.2,0.3,0.4,0.5])
     
-    alphas = 0.05*np.array(range(13))
+    #alphas = 0.05*np.array(range(13))
+    alphas = 0.03*np.array(range(21))
     
 
     # load results
     results = {}
     for alpha in alphas:
-        file = open('mnist_results_{:.2f}.bin'.format(alpha),'rb')
+        file = open('mnist_results_25_{:.2f}.bin'.format(alpha),'rb')
         results[alpha] = pickle.load(file)
         file.close()
 
@@ -222,7 +223,7 @@ if make_error_plot:
 
 if make_data_plot:
 
-    alphas = np.array([0.3,0.5])
+    alphas = np.array([0.0,0.3,0.5])
 
     if load_data:
         noisy_data = [((1-alpha)*future_noisy_data[0] + alpha* np.random.randn(num_noisy_samples, dimensions), future_noisy_data[1], alpha) for alpha in alphas]
@@ -247,30 +248,30 @@ if make_data_plot:
 
 
     # reduce to 50 dim before t-SNE
-#    t1 = time.time()
-#    pca = PCA(n_components = 50)
-#    post_pca_points = pca.fit_transform(all_points)
+    t1 = time.time()
+    pca = PCA(n_components = 50)
+    post_pca_points = pca.fit_transform(all_points)
 
-#    t2 = time.time()
-#    print('PCA time: {:.2f}'.format(t2-t1))
+    t2 = time.time()
+    print('PCA time: {:.2f}'.format(t2-t1))
     
-#    tsne = TSNE()
-#    tsne_points = tsne.fit_transform(post_pca_points)
-#    t3 = time.time()
-#    print('t-SNE time: {:.2f}'.format(t3-t2))
+    tsne = TSNE()
+    tsne_points = tsne.fit_transform(post_pca_points)
+    t3 = time.time()
+    print('t-SNE time: {:.2f}'.format(t3-t2))
 
 #    print(tsne_points.shape)
 
-    tsne_outfile = open('mnist_tsne.bin', 'rb')
+#    tsne_outfile = open('mnist_tsne.bin', 'rb')
 #    pickle.dump(tsne_points, tsne_outfile)
-    tsne_points = pickle.load(tsne_outfile)
-    tsne_outfile.close()
+#    tsne_points = pickle.load(tsne_outfile)
+#    tsne_outfile.close()
     
                         
     plot_handles = []
     plot_labels = []
 
-    colors = ['green', 'cyan','blue']
+    colors = ['green', 'cyan','blue','red']
 
     fig, ax = plt.subplots()
     ax.set_color_cycle(colors)
