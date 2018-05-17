@@ -1842,6 +1842,60 @@ def test_bio_diag():
         "gamma_total": gamma_total
         })
 
+def test_bio_diag2():
+    global xs, xt, labs, labt
+
+    samples = {"train": 1, "test": 1}
+    label_samples = [874, 262, 92, 57]
+
+    data = loadmat(os.path.join(".", "pancreas.mat"))
+    xs = data['x2'].astype(float)
+    xt = data['x3'].astype(float)
+    labs = data['lab2'].ravel().astype(int)
+    labt = data['lab3'].ravel().astype(int)
+
+    # Prepare data splits
+    data_ind = {"train": {}, "test": {}}
+    features = {"source": xs,
+            "target": xt}
+    labels = {"source": labs,
+            "target": labt}
+    labels_unique = {k: np.unique(v) for (k, v) in labels.items()}
+
+    for data_type in ["train", "test"]:
+        for dataset in ["source", "target"]:
+            data_ind[data_type][dataset] = []
+            for sample in range(samples[data_type]):
+                ind_list = []
+                data_ind[data_type][dataset].append(ind_list)
+                lab = labels[dataset]
+                for c in sorted(labels_unique[dataset]):
+                    ind = np.argwhere(lab == c).ravel()
+                    np.random.shuffle(ind)
+                    # ind_list.extend(ind[:min(perclass[dataset], len(ind)])
+                    ind_list.extend(ind[:label_samples[int(c)]])
+
+    def get_data(train, sample):
+        trainstr = "train" if train else "test"
+        xs = features["source"][data_ind[trainstr]["source"][sample], :]
+        xt = features["target"][data_ind[trainstr]["target"][sample], :]
+        labs = labels["source"][data_ind[trainstr]["source"][sample]]
+        labt = labels["target"][data_ind[trainstr]["target"][sample]]
+        # labs_ind =  calc_lab_ind(labs)
+        # return (xs, xt, labs, labt, labs_ind)
+        return (xs, xt, labs, labt)
+
+    print([np.sum(labs == i) for i in range(4)])
+    print([np.sum(labt == i) for i in range(4)])
+
+    (xs, xt, labs, labt) = get_data(True, 0)
+    ns = xs.shape[0]
+    # emb = manifold.TSNE().fit_transform(np.vstack([xs]))
+    emb = decomposition.PCA(n_components = 2).fit_transform(np.vstack([xs]))
+    colors = ["r", "b", "g", "k"]
+    pl.scatter(*emb[:ns,:].T, c = labs, cmap = pl.get_cmap("rainbow"))
+    # pl.show()
+
 def test_caltech_office():
     global domain_data, data_ind, labels
 
@@ -2015,6 +2069,7 @@ if __name__ == "__main__":
     # test_caltech_office()
     test_bio_data()
     # test_bio_diag()
+    # test_bio_diag2()
 
 #     ### Barycenter histogram test
 

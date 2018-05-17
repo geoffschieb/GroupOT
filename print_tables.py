@@ -1,8 +1,8 @@
 import pickle
 import numpy as np
 
-ftype = "caltech"
-# ftype = "bio"
+# ftype = "caltech"
+ftype = "bio"
 
 if ftype == "caltech":
     domain_names = ["amazon", "caltech10", "dslr", "webcam"]
@@ -31,7 +31,7 @@ if ftype == "caltech":
                             print(np.mean(v, axis = 1))
                         # print(v)
 elif ftype == "bio":
-    infile = "bio.bin"
+    infile = "pancreas.bin"
 
     print("-" * 30)
     print("Results for bio data:")
