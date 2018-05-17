@@ -2068,9 +2068,9 @@ if __name__ == "__main__":
     # test_moons_kplot()
     # test_satija()
     # test_caltech_office()
-    # test_bio_data()
+    test_bio_data()
     # test_bio_diag()
-    test_bio_diag2()
+    # test_bio_diag2()
 
 #     ### Barycenter histogram test
 
