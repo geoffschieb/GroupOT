@@ -352,7 +352,8 @@ def kbarycenter(b1, b2, xs, xt, k,
         inner_tol_fact = 0.1,
         inner_tol_start = 1e-3,
         inner_tol_dec_every = 20,
-        entr_reg_start = 1000.0
+        entr_reg_start = 1000.0,
+        debug = False
         ):
 
     converged = False
@@ -365,6 +366,9 @@ def kbarycenter(b1, b2, xs, xt, k,
     # optmap = np.argmax(match, axis = 1)
     # zs = 0.5 * source_means + 0.5 * target_means[optmap]
     zs = source_means
+
+    if debug:
+        zs_l = [zs]
 
     its = 0
     inner_tol_actual = inner_tol if not reduced_inner_tol else inner_tol_start
@@ -380,6 +384,8 @@ def kbarycenter(b1, b2, xs, xt, k,
             print("k barycenter iteration: {}".format(its))
         if its > 1:
             zs = update_points_barycenter(xs, xt, zs, gammas, lambdas)
+            if debug:
+                zs_l.append(zs)
 
         Ms = [ot.dist(xs, zs), ot.dist(zs, xt)]
         gammas = barycenter_bregman_chain(b1, b2, Ms, lambdas, entr_reg,
@@ -403,7 +409,10 @@ def kbarycenter(b1, b2, xs, xt, k,
         if err < tol:
             converged = True
 
-    return (zs, gammas)
+    if not debug:
+        return (zs, gammas)
+    else:
+        return (zs, gammas, zs_l)
 
 def update_points_map(xs, xt, zs1, zs2, gammas, lambdas,
         tol = 1e-8,
@@ -1898,6 +1907,8 @@ def test_pancreas_data():
 def test_bio_diag():
     global gammas, gamma_total
 
+    np.random.seed(42)
+
     data = loadmat(os.path.join(".", "MNN_haem_data.mat"))
     xs = data['xs'].astype(float)
     xt = data['xt'].astype(float)
@@ -1946,19 +1957,36 @@ def test_bio_diag():
     hot_ret = cluster_ot(a, b, xs, xt, k, k, [1.0, 1.0, 1.0], entr_reg,
             relax_outside = [np.inf, np.inf],
             warm_start = False,
-            inner_tol = 1e-5,
-            tol = 1e-4,
+            inner_tol = 1e-4,
+            tol = 1e-5,
             reduced_inner_tol = True,
             inner_tol_start = 1e0,
             max_iter = 300,
             verbose = False,
-            entr_reg_start = 10000.0
+            entr_reg_start = 10000.0,
+            debug = True,
             )
-    (zs1, zs2, a1, a2, gammas) = hot_ret
+
+    (zs1, zs2, a1, a2, gammas, zs1_l, zs2_l) = hot_ret
     gamma_total = total_gamma(gammas)
     expected_err = np.sum(gamma_total * (labs.reshape(-1, 1) != labt.reshape(1, -1)))
     labt_pred_hot = classify_1nn(xs, bary_map(total_gamma(gammas), xs), labs)
     labt_pred_hot2 = classify_1nn(xs, map_from_clusters(xs, xt, gammas), labs)
+
+    kbary_ret = kbarycenter(a, b, xs, xt, k, [1.0, 1.0],
+                entr_reg,
+                warm_start = False,
+                tol = 1e-4,
+                inner_tol = 1e-5,
+                reduced_inner_tol = True,
+                inner_tol_start = 1e0,
+                max_iter = 300,
+                verbose = False,
+                entr_reg_start = 10000.0,
+                debug = True
+                )
+    (zs, gammas_kbary, zs_l) = kbary_ret
+
     print(expected_err)
     print(class_err_combined(labt, labt_pred_hot))
     print(class_err_combined(labt, labt_pred_hot2))
@@ -1970,7 +1998,12 @@ def test_bio_diag():
         "labt": labt,
         "zs1": zs1,
         "zs2": zs2,
+        "zs": zs,
+        "zs1_l": zs1_l,
+        "zs2_l": zs2_l,
+        "zs_l": zs_l,
         "gammas": gammas,
+        "gammas_kbary": gammas_kbary,
         "gamma_ot": gamma_ot,
         "gamma_total": gamma_total
         })
@@ -2202,9 +2235,9 @@ if __name__ == "__main__":
     # test_satija()
     # test_caltech_office()
     # test_bio_data()
-    # test_bio_diag()
+    test_bio_diag()
     # test_bio_diag2()
-    test_pancreas_data()
+    # test_pancreas_data()
 
 #     ### Barycenter histogram test
 

@@ -2,7 +2,8 @@ import pickle
 import numpy as np
 
 # ftype = "caltech"
-ftype = "bio"
+# ftype = "bio"
+ftype = "pancreas"
 
 if ftype == "caltech":
     domain_names = ["amazon", "caltech10", "dslr", "webcam"]
@@ -30,6 +31,31 @@ if ftype == "caltech":
                         else:
                             print(np.mean(v, axis = 1))
                         # print(v)
+
+if ftype == "pancreas":
+    domains = range(4)
+
+    for source in domains:
+        for target in domains:
+            if source != target:
+                infile = "pancreas" + str(source) + "to" + str(target) + ".bin"
+
+                print("-" * 30)
+                print("Results for:")
+                print("Source: {}".format(source))
+                print("Target: {}".format(target))
+                    
+                with open(infile, "rb") as f:
+                    l = pickle.load(f)
+
+                for (k, v) in l["test"].items():
+                    print("{}:".format(k))
+                    if len(v.shape) == 1:
+                        print(np.mean(v))
+                    else:
+                        print(np.mean(v, axis = 1))
+                    # print(v)
+
 elif ftype == "bio":
     infile = "pancreas.bin"
 
