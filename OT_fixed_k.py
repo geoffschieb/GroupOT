@@ -1645,7 +1645,7 @@ def test_bio_data():
     global data_ind, labels, xs, xt, labs, labt
 
     perclass = {"source": 20, "target": 20}
-    samples = {"train": 1, "test": 1}
+    samples = {"train": 10, "test": 10}
     label_samples = [874, 262, 92, 57]
     outfile = "pancreas.bin"
 
@@ -1656,18 +1656,18 @@ def test_bio_data():
     # gl_params = np.array([10.0])**range(-3, 0)
     # gl_params = np.array([0.1])
     # ks = np.array([2])**range(1, 8)
-    # ks = np.array([5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100])
-    ks = np.array([5, 10, 15, 20, 25, 30])
+    ks = np.array([10, 20, 30, 40, 50, 60, 70, 80])
+    # ks = np.array([5, 10, 15, 20, 25, 30])
 
     # entr_regs = np.array([10.0])
     # gl_params = np.array([10.0])**range(4, 5)
     # ks = np.array([2])**range(5, 6)
 
     estimators = {
-            # "ot_gl": {
-            #     "function": "ot_gl",
-            #     "parameter_ranges": [entr_regs, gl_params]
-            #     },
+            "ot_gl": {
+                "function": "ot_gl",
+                "parameter_ranges": [entr_regs, gl_params]
+                },
             # "ot": {
             #     "function": "ot",
             #     "parameter_ranges": []
@@ -1676,10 +1676,10 @@ def test_bio_data():
                 "function": "ot_entr",
                 "parameter_ranges": [entr_regs]
                 },
-            # "ot_kmeans": {
-            #     "function": "ot_kmeans",
-            #     "parameter_ranges": [entr_regs, ks]
-            #     },
+            "ot_kmeans": {
+                "function": "ot_kmeans",
+                "parameter_ranges": [entr_regs, ks]
+                },
             "ot_2kbary": {
                 "function": "ot_2kbary",
                 "parameter_ranges": [entr_regs, ks]
@@ -1700,10 +1700,10 @@ def test_bio_data():
                 "function": "tca",
                 "parameter_ranges": [ks]
                 },
-            "coral": {
-                "function": "coral",
-                "parameter_ranges": []
-                }
+            # "coral": {
+            #     "function": "coral",
+            #     "parameter_ranges": []
+            #     }
             }
 
     domain_data = {}
