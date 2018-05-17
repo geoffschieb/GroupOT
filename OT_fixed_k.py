@@ -1649,10 +1649,10 @@ def test_bio_data():
     label_samples = [874, 262, 92, 57]
     outfile = "pancreas.bin"
 
-    entr_regs = np.array([10.0])**range(-3, 4)
+    entr_regs = np.array([10.0])**range(-3, 1)
     # entr_regs = np.array([10.0])**range(-2, 0)
     # entr_regs = np.array([10.0])**range(-1, 0)
-    gl_params = np.array([10.0])**range(-3, 5)
+    gl_params = np.array([10.0])**range(-3, 3)
     # gl_params = np.array([10.0])**range(-3, 0)
     # gl_params = np.array([0.1])
     # ks = np.array([2])**range(1, 8)
@@ -1761,6 +1761,139 @@ def test_bio_data():
             }
 
     test_domain_adaptation(simulation_params, get_data)
+
+def test_pancreas_data():
+    global data_ind, labels, xs, xt, labs, labt
+
+    perclass = {"source": 20, "target": 20}
+    samples = {"train": 10, "test": 10}
+    tasks = []
+
+    for source in range(4):
+        for target in range(4):
+            if source != target:
+                tasks.append({"source": source, "target": target})
+
+    entr_regs = np.array([10.0])**range(-3, 2)
+    # entr_regs = np.array([10.0])**range(-2, 0)
+    # entr_regs = np.array([10.0])**range(-1, 0)
+    gl_params = np.array([10.0])**range(-3, 3)
+    # gl_params = np.array([10.0])**range(-3, 0)
+    # gl_params = np.array([0.1])
+    # ks = np.array([2])**range(1, 8)
+    ks = np.array([10, 20, 30, 40, 50, 60, 70, 80])
+    # ks = np.array([5, 10, 15, 20, 25, 30])
+
+    # entr_regs = np.array([10.0])
+    # gl_params = np.array([10.0])**range(4, 5)
+    # ks = np.array([2])**range(5, 6)
+
+    estimators = {
+            "ot_gl": {
+                "function": "ot_gl",
+                "parameter_ranges": [entr_regs, gl_params]
+                },
+            # "ot": {
+            #     "function": "ot",
+            #     "parameter_ranges": []
+            #     },
+            "ot_entr": {
+                "function": "ot_entr",
+                "parameter_ranges": [entr_regs]
+                },
+            "ot_kmeans": {
+                "function": "ot_kmeans",
+                "parameter_ranges": [entr_regs, ks]
+                },
+            "ot_2kbary": {
+                "function": "ot_2kbary",
+                "parameter_ranges": [entr_regs, ks]
+                },
+            "ot_kbary": {
+                "function": "ot_kbary",
+                "parameter_ranges": [entr_regs, ks]
+            },
+            "noadj": {
+                "function": "noadj",
+                "parameter_ranges": []
+                },
+            "sa": {
+                "function": "sa",
+                "parameter_ranges": [ks]
+                },
+            "tca": {
+                "function": "tca",
+                "parameter_ranges": [ks]
+                },
+            # "coral": {
+            #     "function": "coral",
+            #     "parameter_ranges": []
+            #     }
+            }
+
+    domain_data = {}
+
+    print("-"*30)
+    print("Running tests for pancreas data")
+    print("-"*30)
+
+    for task in tasks:
+        print("-"*30)
+        print("Running tests for pancreas data")
+        print(str(task["source"]) + " to " + str(task["target"]))
+        print("-"*30)
+        outfile = "pancreas" + str(task["source"]) + "to" + str(task["target"]) + ".bin"
+        data = loadmat(os.path.join(".", "pancreas.mat"))
+        xs = data['x'+str(task["source"])].astype(float)
+        xt = data['x'+str(task["target"])].astype(float)
+        labs = data['lab'+str(task["source"])].ravel().astype(int)
+        labt = data['lab'+str(task["target"])].ravel().astype(int)
+
+        # Prepare data splits
+        data_ind = {"train": {}, "test": {}}
+        features = {"source": xs,
+                "target": xt}
+        labels = {"source": labs,
+                "target": labt}
+        labels_unique = {k: np.unique(v) for (k, v) in labels.items()}
+
+        for data_type in ["train", "test"]:
+            for dataset in ["source", "target"]:
+                data_ind[data_type][dataset] = []
+                for sample in range(samples[data_type]):
+                    ind_list = []
+                    data_ind[data_type][dataset].append(ind_list)
+                    lab = labels[dataset]
+                    for c in sorted(labels_unique[dataset]):
+                        ind = np.argwhere(lab == c).ravel()
+                        len_s = np.sum(labs == c).astype(int)
+                        len_t = np.sum(labt == c).astype(int)
+                        np.random.shuffle(ind)
+                        # ind_list.extend(ind[:min(perclass[dataset], len(ind)])
+                        # ind_list.extend(ind[:label_samples[int(c)]])
+                        ind_list.extend(ind[:min(len_s, len_t)])
+
+        def get_data(train, sample):
+            trainstr = "train" if train else "test"
+            xs = features["source"][data_ind[trainstr]["source"][sample], :]
+            xt = features["target"][data_ind[trainstr]["target"][sample], :]
+            labs = labels["source"][data_ind[trainstr]["source"][sample]]
+            labt = labels["target"][data_ind[trainstr]["target"][sample]]
+            # labs_ind =  calc_lab_ind(labs)
+            # return (xs, xt, labs, labt, labs_ind)
+            return (xs, xt, labs, labt)
+
+        simulation_params = {
+                "entr_regs": entr_regs,
+                "gl_params": gl_params,
+                "ks": ks,
+                "samples_test": samples["test"],
+                "samples_train": samples["train"],
+                "outfile": outfile,
+                "estimators": estimators
+                }
+
+        test_domain_adaptation(simulation_params, get_data)
 
 def test_bio_diag():
     global gammas, gamma_total
@@ -2068,9 +2201,10 @@ if __name__ == "__main__":
     # test_moons_kplot()
     # test_satija()
     # test_caltech_office()
-    test_bio_data()
+    # test_bio_data()
     # test_bio_diag()
     # test_bio_diag2()
+    test_pancreas_data()
 
 #     ### Barycenter histogram test
 
