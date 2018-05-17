@@ -2008,6 +2008,24 @@ def test_bio_diag():
         "gamma_total": gamma_total
         })
 
+    ##% plot OT from source to target
+    n1 = xs.shape[0]
+    n2 = xt.shape[0]
+    nz = zs1.shape[0]
+    emb_dat = decomposition.PCA(n_components=2).fit_transform(np.vstack((xs,xt,zs1,zs2)))
+
+    colors = ['red','green','blue']
+    mark_size = 5
+    mark_hub = 8
+    pl.scatter(*emb_dat[:n1,:].T, marker = 'o', label='Source samples', c=labs, cmap=matplotlib.colors.ListedColormap(colors), s=mark_size)
+    pl.scatter(*emb_dat[n1:n2,:].T, marker = '^', label='Target samples', c=labt, cmap=matplotlib.colors.ListedColormap(colors), s=mark_size)
+    pl.plot(*emb_dat[n1+n2:n1+n2+nz,:].T, 'ok', markersize=mark_hub,fillstyle='full')
+    pl.plot(*emb_dat[n1+n2+nz:,:].T, 'ob', markersize=mark_hub,fillstyle='full')
+    pl.legend()
+    pl.title('OT matrix with samples')
+    pl.legend(loc=0)
+    sub.set_title('OT by CMs')
+
 def test_bio_diag2():
     global xs, xt, labs, labt, emb
 
