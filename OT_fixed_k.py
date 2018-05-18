@@ -537,7 +537,7 @@ def reweighted_clusters(xs, xt, k, lambdas, entr_reg,
 
     return (zs1, zs2, gammas)
 
-def kmeans_transport(xs, xt, k, entr_reg):
+def kmeans_transport(xs, xt, k):
     clust_sources = KMeans(n_clusters = k).fit(xs)
     clust_targets = KMeans(n_clusters = k).fit(xt)
     zs1 = clust_sources.cluster_centers_
@@ -1361,10 +1361,10 @@ def test_domain_adaptation(sim_params, get_data):
 
     # k means + OT
     def kmeans_ot_err(data, params, classifiers):
-        (entr_reg, k) = params
+        k = params[0]
         print("Running kmeans + OT for {}".format(params))
         (xs, xt, labs, labt) = data
-        gamma_km = kmeans_transport(xs, xt, k, entr_reg)
+        gamma_km = kmeans_transport(xs, xt, k)
         if np.any(np.isnan(gamma_km)):
             return(np.inf)
         else:
@@ -1741,32 +1741,32 @@ def test_bio_data():
     # outfile = "pancreas.bin"
     outfile = "haem1.bin"
 
-    # entr_regs = np.array([10.0])**range(-3, 1)
-    entr_regs = np.array([10.0])**range(-2, 0)
+    entr_regs = np.array([10.0])**range(-3, 1)
+    # entr_regs = np.array([10.0])**range(-2, 0)
     # entr_regs = np.array([10.0])**range(-1, 0)
-    # gl_params = np.array([10.0])**range(-3, 3)
+    gl_params = np.array([10.0])**range(-3, 3)
     # map_params1 = np.array([10.0])**range(-1,1)
     # map_params2 = np.array([10.0])**range(-1,1)
     # gl_params = np.array([10.0])**range(-3, 0)
-    gl_params = np.array([0.1])
+    # gl_params = np.array([0.1])
     # ks = np.array([2])**range(1, 8)
     # ks = np.array([10, 20, 30, 40, 50, 60, 70, 80])
     # ks = np.array([5, 10, 15, 20, 25, 30])
-    ks = np.array([3,5,10,20])
+    ks = np.array([3, 5, 10, 20, 30, 50])
 
     # entr_regs = np.array([10.0])
     # gl_params = np.array([10.0])**range(4, 5)
     # ks = np.array([2])**range(5, 6)
 
     estimators = {
-            # "ot_gl": {
-            #     "function": "ot_gl",
-            #     "parameter_ranges": [entr_regs, gl_params]
-            #     },
-            # "ot": {
-            #     "function": "ot",
-            #     "parameter_ranges": []
-            #     },
+            "ot_gl": {
+                "function": "ot_gl",
+                "parameter_ranges": [entr_regs, gl_params]
+                },
+            "ot": {
+                "function": "ot",
+                "parameter_ranges": []
+                },
             # "ot_map": {
             #     "function": "ot_map",
             #     "parameter_ranges": [map_params1, map_params2]
@@ -1775,30 +1775,30 @@ def test_bio_data():
                 "function": "ot_entr",
                 "parameter_ranges": [entr_regs]
                 },
-            # "ot_kmeans": {
-            #     "function": "ot_kmeans",
-            #     "parameter_ranges": [entr_regs, ks]
-            #     },
-            # "ot_2kbary": {
-            #     "function": "ot_2kbary",
-            #     "parameter_ranges": [entr_regs, ks]
-            #     },
-            # "ot_kbary": {
-            #     "function": "ot_kbary",
-            #     "parameter_ranges": [entr_regs, ks]
-            # },
-            # "noadj": {
-            #     "function": "noadj",
-            #     "parameter_ranges": []
-            #     },
-            # "sa": {
-            #     "function": "sa",
-            #     "parameter_ranges": [ks]
-            #     },
-            # "tca": {
-            #     "function": "tca",
-            #     "parameter_ranges": [ks]
-            #     },
+            "ot_kmeans": {
+                "function": "ot_kmeans",
+                "parameter_ranges": [ks]
+                },
+            "ot_2kbary": {
+                "function": "ot_2kbary",
+                "parameter_ranges": [entr_regs, ks]
+                },
+            "ot_kbary": {
+                "function": "ot_kbary",
+                "parameter_ranges": [entr_regs, ks]
+            },
+            "noadj": {
+                "function": "noadj",
+                "parameter_ranges": []
+                },
+            "sa": {
+                "function": "sa",
+                "parameter_ranges": [ks]
+                },
+            "tca": {
+                "function": "tca",
+                "parameter_ranges": [ks]
+                },
             # "coral": {
             #     "function": "coral",
             #     "parameter_ranges": []
@@ -1825,6 +1825,12 @@ def test_bio_data():
     xt = data['xt'].astype(float)
     labs = data['labs'].ravel().astype(int)
     labt = data['labt'].ravel().astype(int)
+
+    # Print label proportions:
+    for c in np.unique(labs):
+        print("Cluster {}".format(c))
+        print("source: {}".format(np.sum(labs == c)))
+        print("target: {}".format(np.sum(labt == c)))
 
     # Prepare data splits
     data_ind = {"train": {}, "test": {}}
@@ -1855,6 +1861,8 @@ def test_bio_data():
         labt = labels["target"][data_ind[trainstr]["target"][sample]]
         # labs_ind =  calc_lab_ind(labs)
         # return (xs, xt, labs, labt, labs_ind)
+        print(xs.shape)
+        print(xt.shape)
         return (xs, xt, labs, labt)
 
     simulation_params = {
