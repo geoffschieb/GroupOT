@@ -1363,14 +1363,14 @@ def test_domain_adaptation(sim_params, get_data):
         b = np.ones(xt.shape[0])/xt.shape[0]
         hot_ret = cluster_ot(a, b, xs, xt, k, k, [1.0, 1.0, 1.0], entr_reg,
                 relax_outside = [np.inf, np.inf],
-                warm_start = False,
+                warm_start = True,
                 inner_tol = 1e-5,
                 tol = 1e-4,
                 reduced_inner_tol = True,
-                inner_tol_start = 1e0,
+                inner_tol_start = 1e-1,
                 max_iter = 300,
                 verbose = False,
-                entr_reg_start = 10000.0
+                entr_reg_start = 1000.0
                 )
         if hot_ret is None:
             return np.inf
@@ -1398,14 +1398,14 @@ def test_domain_adaptation(sim_params, get_data):
         b = np.ones(xt.shape[0])/xt.shape[0]
         kbary_ret = kbarycenter(a, b, xs, xt, k, [1.0, 1.0],
                 entr_reg,
-                warm_start = False,
+                warm_start = True,
                 tol = 1e-4,
                 inner_tol = 1e-5,
                 reduced_inner_tol = True,
-                inner_tol_start = 1e0,
+                inner_tol_start = 1e-1,
                 max_iter = 300,
                 verbose = False,
-                entr_reg_start = 10000.0
+                entr_reg_start = 1000.0
                 )
         if kbary_ret is None:
             return np.inf
@@ -1707,12 +1707,12 @@ def test_opt_grid():
 def test_bio_data():
     global data_ind, labels, xs, xt, labs, labt
 
-    perclass = {"source": 20, "target": 20}
+    perclass = {"source": 100, "target": 100}
     samples = {"train": 1, "test": 1}
     # label_samples = [874, 262, 92, 57]
-    label_samples = [10, 10, 10, 10]
+    # label_samples = [10, 10, 10, 10]
     # outfile = "pancreas.bin"
-    outfile = "pancreas3.bin"
+    outfile = "haem1.bin"
 
     # entr_regs = np.array([10.0])**range(-3, 1)
     entr_regs = np.array([10.0])**range(-2, 0)
@@ -1725,7 +1725,7 @@ def test_bio_data():
     # ks = np.array([2])**range(1, 8)
     # ks = np.array([10, 20, 30, 40, 50, 60, 70, 80])
     # ks = np.array([5, 10, 15, 20, 25, 30])
-    ks = np.array([5,10])
+    ks = np.array([3,5,10,20])
 
     # entr_regs = np.array([10.0])
     # gl_params = np.array([10.0])**range(4, 5)
@@ -1736,18 +1736,18 @@ def test_bio_data():
             #     "function": "ot_gl",
             #     "parameter_ranges": [entr_regs, gl_params]
             #     },
-            # "ot": {
-            #     "function": "ot",
-            #     "parameter_ranges": []
-            #     },
+            "ot": {
+                "function": "ot",
+                "parameter_ranges": []
+                },
             # "ot_map": {
             #     "function": "ot_map",
             #     "parameter_ranges": [map_params1, map_params2]
             #     },
-            # "ot_entr": {
-            #     "function": "ot_entr",
-            #     "parameter_ranges": [entr_regs]
-            #     },
+            "ot_entr": {
+                "function": "ot_entr",
+                "parameter_ranges": [entr_regs]
+                },
             # "ot_kmeans": {
             #     "function": "ot_kmeans",
             #     "parameter_ranges": [entr_regs, ks]
@@ -1756,10 +1756,10 @@ def test_bio_data():
             #     "function": "ot_2kbary",
             #     "parameter_ranges": [entr_regs, ks]
             #     },
-            # "ot_kbary": {
-            #     "function": "ot_kbary",
-            #     "parameter_ranges": [entr_regs, ks]
-            # },
+            "ot_kbary": {
+                "function": "ot_kbary",
+                "parameter_ranges": [entr_regs, ks]
+            },
             # "noadj": {
             #     "function": "noadj",
             #     "parameter_ranges": []
@@ -1784,12 +1784,16 @@ def test_bio_data():
     print("Running tests for bio data")
     print("-"*30)
 
-    # data = loadmat(os.path.join(".", "MNN_haem_data.mat"))
-    data = loadmat(os.path.join(".", "pancreas.mat"))
-    xs = data['x2'].astype(float)
-    xt = data['x3'].astype(float)
-    labs = data['lab2'].ravel().astype(int)
-    labt = data['lab3'].ravel().astype(int)
+    data = loadmat(os.path.join(".", "MNN_haem_data.mat"))
+    # data = loadmat(os.path.join(".", "pancreas.mat"))
+    # xs = data['x2'].astype(float)
+    # xt = data['x3'].astype(float)
+    # labs = data['lab2'].ravel().astype(int)
+    # labt = data['lab3'].ravel().astype(int)
+    xs = data['xs'].astype(float)
+    xt = data['xt'].astype(float)
+    labs = data['labs'].ravel().astype(int)
+    labt = data['labt'].ravel().astype(int)
 
     # Prepare data splits
     data_ind = {"train": {}, "test": {}}
@@ -1809,8 +1813,8 @@ def test_bio_data():
                 for c in sorted(labels_unique[dataset]):
                     ind = np.argwhere(lab == c).ravel()
                     np.random.shuffle(ind)
-                    # ind_list.extend(ind[:min(perclass[dataset], len(ind)])
-                    ind_list.extend(ind[:label_samples[int(c)]])
+                    ind_list.extend(ind[:min(perclass[dataset], len(ind))])
+                    # ind_list.extend(ind[:label_samples[int(c)]])
 
     def get_data(train, sample):
         trainstr = "train" if train else "test"
