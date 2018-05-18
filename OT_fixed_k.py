@@ -697,15 +697,16 @@ def test_gaussian_mixture():
     global xs, xt
 
     n_cluster = 4
-    k = 12
+    k = 4
     # prp = np.random.uniform(size = n_cluster)
     # prp /= np.sum(prp)
-    prp = np.array([0.1, 0.2, 0.3, 0.4])
+    # prp = np.array([0.1, 0.2, 0.3, 0.4])
+    prp = np.array([0.25, 0.25, 0.25, 0.25])
     d = 30
     ns = 100
     nt = 100
-    spread = 1.0
-    variance = 0.5
+    spread = 3.0
+    variance = 1.0
     entr_reg = 10.0
 
     np.random.seed(42)
@@ -718,7 +719,7 @@ def test_gaussian_mixture():
     #     return A.dot(x)
 
     # Random direction
-    direction = np.random.normal(0, 10/np.sqrt(d), d)
+    direction = np.random.normal(0, 70/d, d)
     def trafo(x):
         return x + direction
 
@@ -777,7 +778,8 @@ def test_gaussian_mixture_varn():
     k = 12
     # prp = np.random.uniform(size = n_cluster)
     # prp /= np.sum(prp)
-    prp = np.array([0.1, 0.2, 0.3, 0.4])
+    # prp = np.array([0.1, 0.2, 0.3, 0.4])
+    prp = np.array([0.25, 0.25, 0.25, 0.25])
     d = 30
     spread = 1.0
     variance = 0.5
@@ -2652,8 +2654,8 @@ def test_caltech_office():
             print("An error occurred, contuinuing with next data set!")
 
 if __name__ == "__main__":
-    # test_gaussian_mixture()
-    test_gaussian_mixture_varn()
+    test_gaussian_mixture()
+    # test_gaussian_mixture_varn()
     # test_split_data_uniform_vard()
     # test_split_data_uniform_vark()
     # test_split_data_uniform_varn()
