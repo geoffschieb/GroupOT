@@ -71,6 +71,6 @@ elif ftype == "bio":
             if len(v.shape) == 1:
                 print(np.mean(v))
             else:
-                print(np.mean(v, axis = 1))
+                print("{} +- {}".format(np.mean(v[-2,:], axis = 0), np.std(v[-2,:], axis = 0)))
         # if True:
         #     print(v)
