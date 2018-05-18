@@ -819,6 +819,8 @@ def test_gaussian_mixture_varn():
 
     for (n_ind, n) in enumerate(ns):
         for sample in range(samples):
+            print("-"*30)
+            print("Sample: {}".format(sample))
             for i in range(n):
                 c = np.random.choice(cluster_ids, p = prp)
                 samples_source.append(cluster_centers[c,:] + np.random.normal(0, variance, (1, d)))
@@ -2654,8 +2656,8 @@ def test_caltech_office():
             print("An error occurred, contuinuing with next data set!")
 
 if __name__ == "__main__":
-    test_gaussian_mixture()
-    # test_gaussian_mixture_varn()
+    # test_gaussian_mixture()
+    test_gaussian_mixture_varn()
     # test_split_data_uniform_vard()
     # test_split_data_uniform_vark()
     # test_split_data_uniform_varn()
