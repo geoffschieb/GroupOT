@@ -559,7 +559,7 @@ def kmeans_transport(xs, xt, k):
     gamma_target = np.zeros((xt.shape[0], zs2.shape[0]))
     gamma_target[range(gamma_target.shape[0]), clust_targets.labels_] = 1
     gamma_target /= gamma_target.shape[0]
-    return [gamma_source, gamma_clust, gamma_target.T]
+    return (zs1, zs2, [gamma_source, gamma_clust, gamma_target.T])
 
 def bary_map(gamma, xs):
     # print(np.sum(gamma, axis = 0).shape)
@@ -732,16 +732,21 @@ def test_gaussian_mixture():
     samples_target = []
     samples_source = []
     cluster_ids = list(range(n_cluster))
-    for i in range(ns):
-        c = np.random.choice(cluster_ids, p = prp)
-        samples_source.append(cluster_centers[c,:] + np.random.normal(0, variance, (1, d)))
-    for i in range(nt):
-        c = np.random.choice(range(n_cluster), p = prp)
-        samples_target.append(cluster_centers[c,:] + np.random.normal(0, variance, (1, d)))
-
-    xs = np.vstack([samples for samples in samples_target])
-    xt = np.vstack([samples for samples in samples_source])
+    c = np.random.choice(cluster_ids, p = prp, size = ns)
+    xs = cluster_centers[c,:] + np.random.normal(0, variance, size = (ns, d))
+    c = np.random.choice(cluster_ids, p = prp, size = nt)
+    xt = cluster_centers[c,:] + np.random.normal(0, variance, size = (nt, d))
     xt = np.apply_along_axis(trafo, 1, xt)
+    # for i in range(ns):
+    #     c = np.random.choice(cluster_ids, p = prp)
+    #     samples_source.append(cluster_centers[c,:] + np.random.normal(0, variance, (1, d)))
+    # for i in range(nt):
+    #     c = np.random.choice(range(n_cluster), p = prp)
+    #     samples_target.append(cluster_centers[c,:] + np.random.normal(0, variance, (1, d)))
+
+    # xs = np.vstack([samples for samples in samples_target])
+    # xt = np.vstack([samples for samples in samples_source])
+    # xt = np.apply_along_axis(trafo, 1, xt)
 
     emb_dat = decomposition.PCA(n_components=2).fit_transform(np.vstack((xs,xt)))
     xs_emb = emb_dat[:xs.shape[0],:]
@@ -771,6 +776,7 @@ def test_gaussian_mixture():
 
 def test_gaussian_mixture_varn():
     ns = (np.array([10.0])**np.linspace(1.0, 2.7, 20)).astype(int)
+    # ns = (np.array([10.0])**np.linspace(2.5, 2.7, 20)).astype(int)
     samples = 20
 
     n_cluster = 4
@@ -782,7 +788,7 @@ def test_gaussian_mixture_varn():
     d = 30
     spread = 3.0
     variance = 1.0
-    entr_reg = 5.0
+    entr_reg = 10.0
 
     np.random.seed(42)
 
@@ -793,17 +799,6 @@ def test_gaussian_mixture_varn():
     # def trafo(x):
     #     return A.dot(x)
 
-    # Random direction
-    direction = np.random.normal(0, 70/d, d)
-    def trafo(x):
-        return x + direction
-
-    # # Scaling
-    # scale = 0.1
-    # def trafo(x):
-    #     return scale * x
-
-    cluster_centers = np.random.normal(0, spread, (n_cluster, d))
     samples_target = []
     samples_source = []
     cluster_ids = list(range(n_cluster))
@@ -815,19 +810,26 @@ def test_gaussian_mixture_varn():
     results_kbary = np.empty((samples, len(ns)))
     results_kmeans = np.empty((samples, len(ns)))
 
-    for (n_ind, n) in enumerate(ns):
-        print("n_ind = {}, n = {}".format(n_ind, n))
-        for sample in range(samples):
-            print("Sample: {}".format(sample))
-            for i in range(n):
-                c = np.random.choice(cluster_ids, p = prp)
-                samples_source.append(cluster_centers[c,:] + np.random.normal(0, variance, (1, d)))
-            for i in range(n):
-                c = np.random.choice(range(n_cluster), p = prp)
-                samples_target.append(cluster_centers[c,:] + np.random.normal(0, variance, (1, d)))
+    for sample in range(samples):
+        print("Sample: {}".format(sample))
 
-            xs = np.vstack([samples for samples in samples_target])
-            xt = np.vstack([samples for samples in samples_source])
+        print("n_ind = {}, n = {}".format(n_ind, n))
+        # Random direction
+        direction = np.random.normal(0, 70/d, d)
+        def trafo(x):
+            return x + direction
+
+        cluster_centers = np.random.normal(0, spread, (n_cluster, d))
+        # # Scaling
+        # scale = 0.1
+        # def trafo(x):
+        #     return scale * x
+
+        for (n_ind, n) in enumerate(ns):
+            c = np.random.choice(cluster_ids, p = prp, size = n)
+            xs = cluster_centers[c,:] + np.random.normal(0, variance, size = (n, d))
+            c = np.random.choice(cluster_ids, p = prp, size = n)
+            xt = cluster_centers[c,:] + np.random.normal(0, variance, size = (n, d))
             xt = np.apply_along_axis(trafo, 1, xt)
 
             b1 = np.ones(xs.shape[0])/xs.shape[0]
@@ -840,7 +842,7 @@ def test_gaussian_mixture_varn():
 
             (zs, gammas) = kbarycenter(b1, b2, xs, xt, k, [1.0, 1.0], entr_reg, verbose = True,
                     warm_start = True, relax_outside = [np.inf, np.inf],
-                    tol = 1e-4,
+                    tol = 1e-3,
                     inner_tol = 1e-6,
                     max_iter = 200)
             # # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True)
@@ -863,6 +865,101 @@ def test_gaussian_mixture_varn():
             "variance": variance,
             "entr_reg": entr_reg,
             "ground_truth": ground_truth,
+            "results_vanilla": results_vanilla,
+            "results_kbary": results_kbary,
+            "results_kmeans": results_kmeans,
+            }, f)
+
+def test_gaussian_mixture_vard():
+    ds = (np.array([2])**np.linspace(2, 8, 10)).astype(int)
+    ns = 10*ds
+    samples = 20
+    n_cluster = 4
+    k = 4
+    # prp = np.random.uniform(size = n_cluster)
+    # prp /= np.sum(prp)
+    # prp = np.array([0.1, 0.2, 0.3, 0.4])
+    prp = np.array([0.25, 0.25, 0.25, 0.25])
+    spread = 3.0
+    variance = 1.0
+    entr_reg = 10.0
+
+
+    np.random.seed(42)
+
+    # # psd matrix
+    # A = np.random.normal(0, 1, (d, d))
+    # A = A.dot(A.T)
+    # print(A)
+    # def trafo(x):
+    #     return A.dot(x)
+
+
+    # # Scaling
+    # scale = 0.1
+    # def trafo(x):
+    #     return scale * x
+
+    results_vanilla = np.empty((samples, len(ds)))
+    results_kbary = np.empty((samples, len(ds)))
+    results_kmeans = np.empty((samples, len(ds)))
+    ground_truths = np.empty((samples, len(ds)))
+
+    for (d_ind, d) in enumerate(ds):
+        n = ns[d_ind]
+        print("d = {}".format(d))
+        for sample in range(samples):
+            print("Sample: {}".format(sample))
+            # Random direction
+            direction = np.random.normal(0, 70/d, d)
+            def trafo(x):
+                return x + direction
+            cluster_ids = list(range(n_cluster))
+            cluster_centers = np.random.normal(0, spread, (n_cluster, d))
+            c = np.random.choice(cluster_ids, p = prp, size = n)
+            xs = cluster_centers[c,:] + np.random.normal(0, variance, size = (n, d))
+            c = np.random.choice(cluster_ids, p = prp, size = n)
+            xt = cluster_centers[c,:] + np.random.normal(0, variance, size = (n, d))
+            xt = np.apply_along_axis(trafo, 1, xt)
+
+            ground_truth = np.sum(prp.reshape(-1,1) * (np.apply_along_axis(trafo, 1, cluster_centers) - cluster_centers)**2)
+            print("Ground truth: {}".format(ground_truth))
+            ground_truths[sample, d_ind] = ground_truth
+
+
+            b1 = np.ones(xs.shape[0])/xs.shape[0]
+            b2 = np.ones(xt.shape[0])/xt.shape[0]
+            M = ot.dist(xs, xt)
+
+            cost = ot.sinkhorn2(b1, b2, ot.dist(xs, xt), entr_reg)
+            print("Sinkhorn cost: {}".format(cost))
+            results_vanilla[sample, d_ind] = cost
+
+            (zs, gammas) = kbarycenter(b1, b2, xs, xt, k, [1.0, 1.0], entr_reg, verbose = True,
+                    warm_start = True, relax_outside = [np.inf, np.inf],
+                    tol = 1e-3,
+                    inner_tol = 1e-6,
+                    max_iter = 200)
+            # # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True)
+            bary_cost = estimate_w2_cluster(xs, xt, gammas)
+            print("Barycenter cost: {}".format(bary_cost))
+            results_kbary[sample, d_ind] = bary_cost
+
+            gammas_kmeans = kmeans_transport(xs, xt, k)
+            kmeans_cost = estimate_w2_cluster(xs, xt, gammas_kmeans)
+            results_kmeans[sample, d_ind] = kmeans_cost
+            print("Kmeans cost: {}".format(kmeans_cost))
+
+    with open(os.path.join("gaussian_results", "vard.bin"), "wb") as f:
+        pickle.dump({
+            "ds": ds,
+            "ns": ns,
+            "k": k,
+            "n_cluster": n_cluster,
+            "spread": spread,
+            "variance": variance,
+            "entr_reg": entr_reg,
+            "ground_truths": ground_truths,
             "results_vanilla": results_vanilla,
             "results_kbary": results_kbary,
             "results_kmeans": results_kmeans,
@@ -978,7 +1075,7 @@ def test_split_data_uniform_vark():
 
     ks = np.hstack([range(1,11), range(12,31,2), range(34, 71, 4), range(70, 10, 101)]).astype(int)
     # ds = (np.array([2])**np.linspace(2, 8, 15)).astype(int)
-    d = 100
+    d = 30
     n = 10*d
     samples = 20
     results_vanilla = np.empty((samples, len(ks)))
@@ -1007,7 +1104,7 @@ def test_split_data_uniform_vark():
     print(results_vanilla)
     print(results_kbary)
 
-    with open(os.path.join("uniform_results", "vark.bin"), "wb") as f:
+    with open(os.path.join("uniform_results", "vark2.bin"), "wb") as f:
         pickle.dump({
             "d": d,
             "n": n,
@@ -1096,7 +1193,7 @@ def test_split_data_uniform_visual():
 
     # ks = np.hstack([range(1,11), range(12,31,2), range(34, 71, 4), range(70, 10, 101)]).astype(int)
     # ds = (np.array([2])**np.linspace(2, 8, 15)).astype(int)
-    d = 20
+    d = 30
     # ns = (np.array([10.0])**np.linspace(1.7, 3, 20)).astype(int)
     n = 100
     k = 4
@@ -1146,12 +1243,13 @@ def test_split_data_uniform_vard():
         direction[0:2] = np.sign(x[0:2])
         return x + length * direction
 
-    k = 40
-    samples = 10
-    ds = (np.array([2])**np.linspace(2, 8, 10)).astype(int)
-    ns = 10*ds
+    k = 4
+    samples = 20
+    ds = (np.array([10.0])**np.linspace(1, 2, 10)).astype(int)
+    ns = 10 * ds
     results_vanilla = np.empty((samples, len(ds)))
     results_kbary = np.empty((samples, len(ds)))
+    results_kmeans = np.empty((samples, len(ds)))
 
     for (d_ind, d) in enumerate(ds):
         for sample in range(samples):
@@ -1205,6 +1303,11 @@ def test_split_data_uniform_vard():
             results_kbary[sample, d_ind] = bary_cost
             print("Barycenter cost: {}".format(bary_cost))
 
+            gammas_kmeans = kmeans_transport(xs, xt, k)
+            kmeans_cost = estimate_w2_cluster(xs, xt, gammas_kmeans)
+            results_kmeans[sample, d_ind] = kmeans_cost
+            print("Kmeans cost: {}".format(kmeans_cost))
+
     #         # Barycenter plot
     #         pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
     #         pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
@@ -1214,13 +1317,14 @@ def test_split_data_uniform_vard():
     #         plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
     #         pl.show()
 
-    with open(os.path.join("uniform_results", "vard.bin"), "wb") as f:
+    with open(os.path.join("uniform_results", "vard2.bin"), "wb") as f:
         pickle.dump({
             "ds": ds,
             "ns": ns,
             "k": k,
             "results_vanilla": results_vanilla,
-            "results_kbary": results_kbary
+            "results_kbary": results_kbary,
+            "results_kmeans" : results_kmeans
             }, f)
 
 def gen_rot2d(deg):
@@ -1969,10 +2073,10 @@ def test_bio_data():
     label_samples = [20, 20, 20]
     # label_samples = [10, 10, 10, 10]
     # outfile = "pancreas.bin"
-    outfile = "haem3.bin"
+    outfile = "haem_small.bin"
 
     # entr_regs = np.array([10.0])**np.linspace(-3, 0, 7)
-    entr_regs = np.array([10.0])**np.linspace(-2, -1, 3)
+    entr_regs = np.array([10.0])**np.linspace(-3, -1, 5)
     # entr_regs = np.array([10.0])**range(-2, 0)
     # entr_regs = np.array([10.0])**range(-1, 0)
     # gl_params = np.array([10.0])**range(-3, 3)
@@ -2755,9 +2859,10 @@ def test_caltech_office():
 
 if __name__ == "__main__":
     # test_gaussian_mixture()
-    test_gaussian_mixture_varn()
+    # test_gaussian_mixture_varn()
+    # test_gaussian_mixture_vard()
     # test_gaussian_mixture_vark()
-    # test_split_data_uniform_vard()
+    test_split_data_uniform_vard()
     # test_split_data_uniform_vark()
     # test_split_data_uniform_varn()
     # test_split_data_uniform_visual()

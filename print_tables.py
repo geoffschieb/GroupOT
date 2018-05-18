@@ -57,7 +57,7 @@ if ftype == "pancreas":
                     # print(v)
 
 elif ftype == "bio":
-    infile = "haem2.bin"
+    infile = "haem3.bin"
 
     print("-" * 30)
     print("Results for bio data:")
@@ -65,12 +65,47 @@ elif ftype == "bio":
     with open(infile, "rb") as f:
         l = pickle.load(f)
 
-    for (k, v) in l["test"].items():
-        print("{}:".format(k))
-        if hasattr(v, "shape"):
-            if len(v.shape) == 1:
-                print(np.mean(v))
-            else:
-                print("{} +- {}".format(np.mean(v[-2,:], axis = 0), np.std(v[-2,:], axis = 0)))
-        # if True:
-        #     print(v)
+    # for (k, v) in l["test"].items():
+    #     print("{}:".format(k))
+    #     if hasattr(v, "shape"):
+    #         if len(v.shape) == 1:
+    #             print(np.mean(v))
+    #         else:
+    #             # v = v[v != np.inf]
+    #             v_cor = v[-1,:]
+    #             v_cor = (v_cor[v_cor != np.inf])
+    #             # print(v_cor)
+    #             # print("{} +- {}".format(np.mean(v[-1,:], axis = 0), np.std(v[-1,:], axis = 0)))
+    #             print("{} +-".format(np.mean(v_cor)))
+    #     # if True:
+    #     #     print(v)
+
+    # print(" & & ".join(l["test"].keys()) + "\\\\")
+    vals = []
+    stds = []
+    for v in l["test"].values():
+        vals.append(np.mean(v[-1,:]))
+        stds.append(np.std(v[-1,:]))
+
+    outvals = []
+    for val in vals:
+        outvals.append("{:.2f}".format(100 * val))
+    print("Mean acc & " + " & ".join(outvals) + "\\\\")
+    outvals = []
+    for std in stds:
+        outvals.append("{:.2f}".format(100 * std))
+    print("Std & " + " & ".join(outvals) + "\\\\")
+    # for (k, v) in l["test"].items():
+    #     print("{}:".format(k))
+    #     if hasattr(v, "shape"):
+    #         if len(v.shape) == 1:
+    #             print(np.mean(v))
+    #         else:
+    #             # v = v[v != np.inf]
+    #             v_cor = v[-1,:]
+    #             v_cor = (v_cor[v_cor != np.inf])
+    #             # print(v_cor)
+    #             # print("{} +- {}".format(np.mean(v[-1,:], axis = 0), np.std(v[-1,:], axis = 0)))
+    #             print("{} +-".format(np.mean(v_cor)))
+    #     # if True:
+    #     #     print(v)
