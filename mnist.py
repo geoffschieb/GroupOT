@@ -7,8 +7,8 @@ from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 
 # sections to run
-load_data = False #load original MNIST data (needed to refit models)
-refit_models = False
+load_data = False #True #load original MNIST data (needed to refit models)
+refit_models = False #True
 make_error_plot = True
 make_data_plot = False
 
@@ -34,7 +34,7 @@ if load_data:
 
 
 
-    num_clean_samples = 26000 # number of images loaded without noise, for all train/test runs
+    num_clean_samples = 6000 # number of images loaded without noise, for all train/test runs
     num_noisy_samples = num_clean_samples
 
 
@@ -47,19 +47,22 @@ if load_data:
     # Prepare noisy_data by adding Gaussian noise at different levels
 
     # alphas to run
-    alphas = 0.03*np.array(range(21))
+    #alphas = 0.03*np.array(range(21))
+    alphas = np.array([0.0, 0.3, 0.6])
     
     noisy_data = [((1-alpha)*future_noisy_data[0] + alpha* np.random.randn(num_noisy_samples, dimensions), future_noisy_data[1], alpha) for alpha in alphas]
 
 
     # Classify at each noise level using clean data
 
-    samples_test = 25
+    samples_test = 1
     samples_train = samples_test
     entr_regs = np.array([10.0])**range(0,1)#(-3,5)
     gl_params = np.array([10.0])**range(-3,5)
-    ks =  np.array([10, 20, 30, 40, 50, 60, 70, 80])
+    centroid_ks =  np.array([10, 20, 30, 40, 50, 60, 70, 80])
+    nn_ks = np.array([1,3,5,10,20])
 
+    
     estimators = {
         "ot_gl": {
             "function": "ot_gl",
@@ -75,15 +78,15 @@ if load_data:
         },
         "ot_kmeans": {
             "function": "ot_kmeans",
-            "parameter_ranges": [entr_regs, ks]
+            "parameter_ranges": [entr_regs, centroid_ks]
         },
         "ot_2kbary": {
             "function": "ot_2kbary",
-            "parameter_ranges": [entr_regs, ks]
+            "parameter_ranges": [entr_regs, centroid_ks]
         },
         "ot_kbary": {
             "function": "ot_kbary",
-            "parameter_ranges": [entr_regs, ks]
+            "parameter_ranges": [entr_regs, centroid_ks]
         },
         "noadj": {
             "function": "noadj",
@@ -91,11 +94,11 @@ if load_data:
         },
         "sa": {
             "function": "sa",
-            "parameter_ranges": [ks]
+            "parameter_ranges": [centroid_ks]
         },
         "tca": {
             "function": "tca",
-            "parameter_ranges": [ks]
+            "parameter_ranges": [centroid_ks]
         },
                                     #"coral": {
                                     #"function": "coral",
@@ -106,7 +109,8 @@ if load_data:
     sim_params = {
         "entr_regs": entr_regs,
         "gl_params": gl_params,
-        "ks": ks,
+        "centroid_ks": centroid_ks,
+        "nn_ks": nn_ks,
         "samples_test": samples_test,
         "samples_train": samples_train,
         "estimators": estimators,
@@ -114,7 +118,7 @@ if load_data:
 
     if refit_models:
         for target in noisy_data:
-            sim_params["outfile"] = "mnist_results_25_{:.2f}.bin".format(target[2])
+            sim_params["outfile"] = "mnist_results_{:.2f}.bin".format(target[2])
             
             print("Noise level: alpha = {}".format(target[2]))
             def get_data(train, i):
@@ -158,13 +162,14 @@ if make_error_plot:
     #alphas = np.array([0.0,0.05,0.1,0.2,0.3,0.4,0.5])
     
     #alphas = 0.05*np.array(range(13))
-    alphas = 0.03*np.array(range(21))
-    
+#    alphas = 0.03*np.array(range(21))
+    alphas = np.array([0.0, 0.3, 0.6])
+    nn_ks = np.array([1,3,5,10,20])
 
     # load results
     results = {}
     for alpha in alphas:
-        file = open('mnist_results_25_{:.2f}.bin'.format(alpha),'rb')
+        file = open('mnist_results_{:.2f}.bin'.format(alpha),'rb')
         results[alpha] = pickle.load(file)
         file.close()
 
@@ -172,7 +177,7 @@ if make_error_plot:
         # summarize
         results[alpha]['average_test'] = {}
         for key in results[alpha]['test'].keys():
-            results[alpha]['average_test'][key] = np.mean(results[alpha]["test"][key],-1) #average over last dimension, which is samples_test
+            results[alpha]['average_test'][key] = results[alpha]["test"][key] 
 
         print('alpha = ' + str(alpha))
         print(results[alpha]['average_test'])
@@ -190,12 +195,16 @@ if make_error_plot:
     # rearrange average test results into plottable vectors
 
     result_curves = {}
-    for estimator in results[alphas[0]]['average_test'].keys():
-        if (estimator == 'ot_kbary') | (estimator == 'ot_2kbary') :
-            result_curves[estimator + '_bary_map'] = np.array([results[alpha]['average_test'][estimator][0] for alpha in alphas])
-            result_curves[estimator + '_map_from_clusters'] = np.array([results[alpha]['average_test'][estimator][1] for alpha in alphas])
-        else:
-            result_curves[estimator] = np.array([results[alpha]['average_test'][estimator] for alpha in alphas])
+    for estimator in ['sa','ot_entr']:#[results[alphas[0]]['average_test'].keys():
+        for kindex in range(len(nn_ks)):
+            k = nn_ks[kindex]
+            if (estimator == 'ot_kbary') | (estimator == 'ot_2kbary') :
+                #bary_map is never any good
+                #result_curves[estimator + '_bary_map ' + str(k) + 'nn'] = np.array([results[alpha]['average_test'][estimator][kindex+1] for alpha in alphas])
+                result_curves[estimator + '_map_from_clusters ' + str(k) + 'nn'] = np.array([results[alpha]['average_test'][estimator][kindex+1+len(nn_ks)] for alpha in alphas])
+            else:
+                result_curves[estimator + ' ' + str(k) + 'nn'] = np.array([results[alpha]['average_test'][estimator][kindex] for alpha in alphas])
+        
 
 
 

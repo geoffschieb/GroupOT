@@ -1293,12 +1293,12 @@ def test_domain_adaptation(sim_params, get_data):
     
     # Extract data from parameters
     entr_regs = sim_params["entr_regs"]
-    ks = sim_params["ks"]
+    centroid_ks = sim_params["centroid_ks"]
     gl_params = sim_params["gl_params"]
     samples_test = sim_params["samples_test"]
     samples_train = sim_params["samples_train"]
     estimators = sim_params["estimators"]
-    ks = sim_params["ks"]
+    nn_ks = sim_params["nn_ks"]
 
     # Determine best parameters
 
@@ -1485,7 +1485,7 @@ def test_domain_adaptation(sim_params, get_data):
         Xa = XS.dot(np.transpose(XS)).dot(XT)  # align source subspace
         sourceAdapted = xs.dot(Xa)  # project source in aligned subspace
         targetAdapted = xt.dot(XT)  # project target in target subspace
-        labt_preds = [KNeighborsClassifier(n_neighbors = k, algorithm='brute').fit(sourceAdapted, labs).predict(targetAdapted) for k in ks]
+        labt_preds = [KNeighborsClassifier(n_neighbors = k, algorithm='brute').fit(sourceAdapted, labs).predict(targetAdapted) for k in nn_ks]
         # labt_pred = [classify_1nn(sourceAdapted, targetAdapted, labs)
         return [class_err_combined(labt, labt_pred) for labt_pred in labt_preds]
 
@@ -1515,7 +1515,7 @@ def test_domain_adaptation(sim_params, get_data):
         sourceAdapted = np.dot(K[:Ns, :], W)  # project source
         targetAdapted = np.dot(K[Ns:, :], W)  # project target
         # labt_pred = classify_1nn(sourceAdapted, targetAdapted, labs)
-        labt_preds = [KNeighborsClassifier(n_neighbors = k, algorithm='brute').fit(sourceAdapted, labs).predict(targetAdapted) for k in ks]
+        labt_preds = [KNeighborsClassifier(n_neighbors = k, algorithm='brute').fit(sourceAdapted, labs).predict(targetAdapted) for k in nn_ks]
         return [class_err_combined(labt, labt_pred) for labt_pred in labt_preds]
 
     def coral_err(data, params, classifiers):
@@ -1535,7 +1535,7 @@ def test_domain_adaptation(sim_params, get_data):
         targetAdapted = xt
         # labt_pred = classify_1nn(sourceAdapted, targetAdapted, labs)
         # return class_err_combined(labt, labt_pred)
-        labt_preds = [KNeighborsClassifier(n_neighbors = k, algorithm='brute').fit(sourceAdapted, labs).predict(targetAdapted) for k in ks]
+        labt_preds = [KNeighborsClassifier(n_neighbors = k, algorithm='brute').fit(sourceAdapted, labs).predict(targetAdapted) for k in nn_ks]
         return [class_err_combined(labt, labt_pred) for labt_pred in labt_preds]
 
     estimator_functions = {
@@ -1553,17 +1553,17 @@ def test_domain_adaptation(sim_params, get_data):
             }
 
     estimator_outlen = {
-            "ot": len(ks),
-            "ot_entr": 1 + len(ks),
-            "ot_kmeans": len(ks),
-            "ot_2kbary": 1 + 2*len(ks),
-            "ot_kbary": 1 + 2*len(ks),
-            "ot_gl": len(ks),
-            "ot_map": len(ks),
-            "noadj": len(ks),
-            "sa": len(ks),
-            "tca": len(ks),
-            "coral": len(ks),
+            "ot": len(nn_ks),
+            "ot_entr": 1 + len(nn_ks),
+            "ot_kmeans": len(nn_ks),
+            "ot_2kbary": 1 + 2*len(nn_ks),
+            "ot_kbary": 1 + 2*len(nn_ks),
+            "ot_gl": len(nn_ks),
+            "ot_map": len(nn_ks),
+            "noadj": len(nn_ks),
+            "sa": len(nn_ks),
+            "tca": len(nn_ks),
+            "coral": len(nn_ks),
             }
 
     # Training
@@ -1589,7 +1589,7 @@ def test_domain_adaptation(sim_params, get_data):
         t0 = time.time()
         print("Training sample: {}/{}".format(sample+1, samples_train))
         (xs, xt, labs, labt) = get_data(True, sample)
-        classifiers = [KNeighborsClassifier(n_neighbors = k, algorithm='brute').fit(xs, labs) for k in ks]
+        classifiers = [KNeighborsClassifier(n_neighbors = k, algorithm='brute').fit(xs, labs) for k in nn_ks]
         for (est_name, est_params) in estimators.items():
             parameters = est_params["parameter_ranges"]
             param_lens = list(map(len, parameters))
@@ -1640,7 +1640,7 @@ def test_domain_adaptation(sim_params, get_data):
         t0 = time.time()
         print("Testing sample: {}/{}".format(sample+1, samples_test))
         (xs, xt, labs, labt) = get_data(False, sample)
-        classifiers = [KNeighborsClassifier(n_neighbors = k, algorithm='kd_tree').fit(xs, labs) for k in ks]
+        classifiers = [KNeighborsClassifier(n_neighbors = k, algorithm='kd_tree').fit(xs, labs) for k in nn_ks]
         for (est_name, est_params) in estimators.items():
             outlen = estimator_outlen.get(est_params["function"], 1)
             est_fun = estimator_functions[est_params["function"]]
