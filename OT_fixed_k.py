@@ -16,6 +16,7 @@ import itertools
 import warnings
 import pickle
 import os
+import subprocess
 from sklearn import preprocessing
 
 #%% Utility functions
@@ -540,7 +541,7 @@ def reweighted_clusters(xs, xt, k, lambdas, entr_reg,
 
     return (zs1, zs2, gammas)
 
-def kmeans_transport(xs, xt, k, entr_reg):
+def kmeans_transport(xs, xt, k):
     clust_sources = KMeans(n_clusters = k).fit(xs)
     clust_targets = KMeans(n_clusters = k).fit(xt)
     zs1 = clust_sources.cluster_centers_
@@ -1319,6 +1320,24 @@ def test_domain_adaptation(sim_params, get_data):
         # labt_pred = classify_knn(xs, bary_map(gamma_ot, xs), labs, 50)
         return [class_err_combined(labt, labt_pred) for labt_pred in labt_preds]
 
+    def mnn_err(data, params, classifiers):
+        print("Running MNN for {}".format(params))
+        (xs, xt, labs, labt) = data
+
+        savemat(os.path.join(".", "in.mat"), {
+            "A" : xs,
+            "B" : xt})
+        # os.system("Rscript simple_MNN.R | /dev/null")
+        with open(os.devnull, 'w') as devnull:
+            subprocess.run(["Rscript", "simple_MNN.R"], stdout=devnull, stderr=devnull)
+        mnn_data = loadmat(os.path.join(".", "out.mat"))
+        os.remove("out.mat")
+        os.remove("in.mat")
+        xt_adj = mnn_data["B_corr"]
+
+        labt_preds = [c.predict(xt_adj) for c in classifiers]
+        return [class_err_combined(labt, labt_pred) for labt_pred in labt_preds]
+
     # Entropically regularized OT
     def ot_entr_err(data, params, classifiers):
         entr_reg = params[0]
@@ -1346,10 +1365,10 @@ def test_domain_adaptation(sim_params, get_data):
 
     # k means + OT
     def kmeans_ot_err(data, params, classifiers):
-        (entr_reg, k) = params
+        k = params[0]
         print("Running kmeans + OT for {}".format(params))
         (xs, xt, labs, labt) = data
-        gamma_km = kmeans_transport(xs, xt, k, entr_reg)
+        gamma_km = kmeans_transport(xs, xt, k)
         if np.any(np.isnan(gamma_km)):
             return(np.inf)
         else:
@@ -1549,7 +1568,8 @@ def test_domain_adaptation(sim_params, get_data):
             "noadj": no_adjust_err,
             "sa": subspace_align_err,
             "tca": tca_err,
-            "coral": coral_err
+            "coral": coral_err,
+            "mnn": mnn_err
             }
 
     estimator_outlen = {
@@ -1564,6 +1584,7 @@ def test_domain_adaptation(sim_params, get_data):
             "sa": len(nn_ks),
             "tca": len(nn_ks),
             "coral": len(nn_ks),
+            "mnn": len(nn_ks)
             }
 
     # Training
@@ -1645,12 +1666,18 @@ def test_domain_adaptation(sim_params, get_data):
             outlen = estimator_outlen.get(est_params["function"], 1)
             est_fun = estimator_functions[est_params["function"]]
             cur_params = opt_params[est_name]
+            parameters = est_params["parameter_ranges"]
+            param_lens = list(map(len, parameters))
             if outlen != 1:
-                for j in range(outlen):
-                    err = est_fun((xs, xt, labs, labt), cur_params[j], classifiers)
-                    if err != np.inf:
-                        err = err[j]
-                    est_test_results[est_name][j, sample] = err
+                if len(param_lens) == 0:
+                    err = est_fun((xs, xt, labs, labt), [], classifiers)
+                    est_test_results[est_name][:,sample] = err
+                else:
+                    for j in range(outlen):
+                        err = est_fun((xs, xt, labs, labt), cur_params[j], classifiers)
+                        if err != np.inf:
+                            err = err[j]
+                        est_test_results[est_name][j, sample] = err
             else:
                 err = est_fun((xs, xt, labs, labt), cur_params, classifiers)
                 est_test_results[est_name][sample] = err[0]
@@ -1718,28 +1745,28 @@ def test_bio_data():
     # outfile = "pancreas.bin"
     outfile = "haem1.bin"
 
-    # entr_regs = np.array([10.0])**range(-3, 1)
-    entr_regs = np.array([10.0])**range(-2, 0)
+    entr_regs = np.array([10.0])**range(-3, 1)
+    # entr_regs = np.array([10.0])**range(-2, 0)
     # entr_regs = np.array([10.0])**range(-1, 0)
-    # gl_params = np.array([10.0])**range(-3, 3)
+    gl_params = np.array([10.0])**range(-3, 3)
     # map_params1 = np.array([10.0])**range(-1,1)
     # map_params2 = np.array([10.0])**range(-1,1)
     # gl_params = np.array([10.0])**range(-3, 0)
-    gl_params = np.array([0.1])
+    # gl_params = np.array([0.1])
     # ks = np.array([2])**range(1, 8)
     # ks = np.array([10, 20, 30, 40, 50, 60, 70, 80])
     # ks = np.array([5, 10, 15, 20, 25, 30])
-    ks = np.array([3,5,10,20])
+    ks = np.array([3, 5, 10, 20, 30, 50])
 
     # entr_regs = np.array([10.0])
     # gl_params = np.array([10.0])**range(4, 5)
     # ks = np.array([2])**range(5, 6)
 
     estimators = {
-            # "ot_gl": {
-            #     "function": "ot_gl",
-            #     "parameter_ranges": [entr_regs, gl_params]
-            #     },
+            "ot_gl": {
+                "function": "ot_gl",
+                "parameter_ranges": [entr_regs, gl_params]
+                },
             "ot": {
                 "function": "ot",
                 "parameter_ranges": []
@@ -1752,34 +1779,38 @@ def test_bio_data():
                 "function": "ot_entr",
                 "parameter_ranges": [entr_regs]
                 },
-            # "ot_kmeans": {
-            #     "function": "ot_kmeans",
-            #     "parameter_ranges": [entr_regs, ks]
-            #     },
-            # "ot_2kbary": {
-            #     "function": "ot_2kbary",
-            #     "parameter_ranges": [entr_regs, ks]
-            #     },
+            "ot_kmeans": {
+                "function": "ot_kmeans",
+                "parameter_ranges": [ks]
+                },
+            "ot_2kbary": {
+                "function": "ot_2kbary",
+                "parameter_ranges": [entr_regs, ks]
+                },
             "ot_kbary": {
                 "function": "ot_kbary",
                 "parameter_ranges": [entr_regs, ks]
             },
-            # "noadj": {
-            #     "function": "noadj",
-            #     "parameter_ranges": []
-            #     },
-            # "sa": {
-            #     "function": "sa",
-            #     "parameter_ranges": [ks]
-            #     },
-            # "tca": {
-            #     "function": "tca",
-            #     "parameter_ranges": [ks]
-            #     },
+            "noadj": {
+                "function": "noadj",
+                "parameter_ranges": []
+                },
+            "sa": {
+                "function": "sa",
+                "parameter_ranges": [ks]
+                },
+            "tca": {
+                "function": "tca",
+                "parameter_ranges": [ks]
+                },
             # "coral": {
             #     "function": "coral",
             #     "parameter_ranges": []
             #     }
+            "mnn": {
+                "function": "mnn",
+                "parameter_ranges": []
+            }
             }
 
     domain_data = {}
@@ -1798,6 +1829,12 @@ def test_bio_data():
     xt = data['xt'].astype(float)
     labs = data['labs'].ravel().astype(int)
     labt = data['labt'].ravel().astype(int)
+
+    # Print label proportions:
+    for c in np.unique(labs):
+        print("Cluster {}".format(c))
+        print("source: {}".format(np.sum(labs == c)))
+        print("target: {}".format(np.sum(labt == c)))
 
     # Prepare data splits
     data_ind = {"train": {}, "test": {}}
@@ -1828,17 +1865,19 @@ def test_bio_data():
         labt = labels["target"][data_ind[trainstr]["target"][sample]]
         # labs_ind =  calc_lab_ind(labs)
         # return (xs, xt, labs, labt, labs_ind)
+        print(xs.shape)
+        print(xt.shape)
         return (xs, xt, labs, labt)
 
     simulation_params = {
             "entr_regs": entr_regs,
             "gl_params": gl_params,
-            "ks": ks,
+            "centroid_ks": ks,
             "samples_test": samples["test"],
             "samples_train": samples["train"],
             "outfile": outfile,
             "estimators": estimators,
-            "ks": [1, 10, 20]
+            "nn_ks": [1, 10, 20]
             }
 
     test_domain_adaptation(simulation_params, get_data)
@@ -2268,14 +2307,6 @@ def test_bio_diag3():
     xt = data['xt'].astype(float)
     labs = data['labs'].ravel().astype(int)
     labt = data['labt'].ravel().astype(int)
-    savemat(os.path.join(".", "in.mat"), {
-        "A" : xs,
-        "B" : xt})
-    os.system("Rscript simple_MNN.R")
-    mnn_data = loadmat(os.path.join(".", "out.mat"))
-    os.remove("out.mat")
-    os.remove("in.mat")
-    xt_adj = mnn_data["B_corr"]
 
     # Prepare data splits
     data_ind = {"train": {}, "test": {}}
@@ -2312,13 +2343,27 @@ def test_bio_diag3():
     print([np.sum(labt == i) for i in range(4)])
 
     (xs, xt, labs, labt) = get_data(True, 0)
+
+    savemat(os.path.join(".", "in.mat"), {
+        "A" : xs,
+        "B" : xt})
+    # os.system("Rscript simple_MNN.R | /dev/null")
+    devnull = open(os.devnull, 'w')
+    subprocess.run(["Rscript", "simple_MNN.R"], stdout=devnull, stderr=devnull)
+    mnn_data = loadmat(os.path.join(".", "out.mat"))
+    os.remove("out.mat")
+    os.remove("in.mat")
+    xt_adj = mnn_data["B_corr"]
+
     ns = xs.shape[0]
+    nt = xt.shape[0]
     # emb = manifold.TSNE().fit_transform(np.vstack([xs, xt]))
-    emb = decomposition.PCA(n_components = 2).fit_transform(np.vstack([xs, xt]))
+    emb = decomposition.PCA(n_components = 2).fit_transform(np.vstack([xs, xt, xt_adj]))
     # colors = ["r", "b", "g", "k"]
     colors = ['red','green','blue']
     pl.scatter(*emb[:ns,:].T, c = labs, cmap = matplotlib.colors.ListedColormap(colors))
-    pl.scatter(*emb[ns:,:].T, marker="^", c = labt, cmap = matplotlib.colors.ListedColormap(colors))
+    pl.scatter(*emb[ns:ns+nt,:].T, marker="^", c = labt, cmap = matplotlib.colors.ListedColormap(colors))
+    pl.scatter(*emb[ns+nt:,:].T, marker=">", c = labt, cmap = matplotlib.colors.ListedColormap(colors))
     pl.show()
 
 def test_pancreas_data():
@@ -2798,10 +2843,10 @@ if __name__ == "__main__": # test_gaussian_mixture() # test_split_data_uniform_v
     # test_moons_kplot()
     # test_satija()
     # test_caltech_office()
-    # test_bio_data()
+    test_bio_data()
     # test_bio_diag()
     # test_bio_diag2()
-    test_bio_diag3()
+    # test_bio_diag3()
     # test_pancreas_data()
 
 #     ### Barycenter histogram test
