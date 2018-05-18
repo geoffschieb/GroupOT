@@ -2252,6 +2252,71 @@ def test_bio_diag2():
     pl.scatter(*emb[ns:,:].T, c = labt, cmap = pl.get_cmap("jet"))
     pl.show()
 
+def test_bio_diag3():
+    global xs, xt, labs, labt, emb, xt_adj
+
+    samples = {"train": 1, "test": 1}
+    perclass = {"source": 50, "target": 50}
+    # label_samples = [874, 262, 92, 57]
+
+    data = loadmat(os.path.join(".", "MNN_haem_data.mat"))
+    xs = data['xs'].astype(float)
+    xt = data['xt'].astype(float)
+    labs = data['labs'].ravel().astype(int)
+    labt = data['labt'].ravel().astype(int)
+    savemat(os.path.join(".", "in.mat"), {
+        "A" : xs,
+        "B" : xt})
+    os.system("Rscript simple_MNN.R")
+    mnn_data = loadmat(os.path.join(".", "out.mat"))
+    os.remove("out.mat")
+    os.remove("in.mat")
+    xt_adj = mnn_data["B_corr"]
+
+    # Prepare data splits
+    data_ind = {"train": {}, "test": {}}
+    features = {"source": xs,
+            "target": xt}
+    labels = {"source": labs,
+            "target": labt}
+    labels_unique = {k: np.unique(v) for (k, v) in labels.items()}
+
+    for data_type in ["train", "test"]:
+        for dataset in ["source", "target"]:
+            data_ind[data_type][dataset] = []
+            for sample in range(samples[data_type]):
+                ind_list = []
+                data_ind[data_type][dataset].append(ind_list)
+                lab = labels[dataset]
+                for c in sorted(labels_unique[dataset]):
+                    ind = np.argwhere(lab == c).ravel()
+                    np.random.shuffle(ind)
+                    ind_list.extend(ind[:min(perclass[dataset], len(ind))])
+                    # ind_list.extend(ind[:label_samples[int(c)]])
+
+    def get_data(train, sample):
+        trainstr = "train" if train else "test"
+        xs = features["source"][data_ind[trainstr]["source"][sample], :]
+        xt = features["target"][data_ind[trainstr]["target"][sample], :]
+        labs = labels["source"][data_ind[trainstr]["source"][sample]]
+        labt = labels["target"][data_ind[trainstr]["target"][sample]]
+        # labs_ind =  calc_lab_ind(labs)
+        # return (xs, xt, labs, labt, labs_ind)
+        return (xs, xt, labs, labt)
+
+    print([np.sum(labs == i) for i in range(4)])
+    print([np.sum(labt == i) for i in range(4)])
+
+    (xs, xt, labs, labt) = get_data(True, 0)
+    ns = xs.shape[0]
+    # emb = manifold.TSNE().fit_transform(np.vstack([xs, xt]))
+    emb = decomposition.PCA(n_components = 2).fit_transform(np.vstack([xs, xt]))
+    # colors = ["r", "b", "g", "k"]
+    colors = ['red','green','blue']
+    pl.scatter(*emb[:ns,:].T, c = labs, cmap = matplotlib.colors.ListedColormap(colors))
+    pl.scatter(*emb[ns:,:].T, marker="^", c = labt, cmap = matplotlib.colors.ListedColormap(colors))
+    pl.show()
+
 def test_caltech_office():
     global domain_data, data_ind, labels
 
@@ -2408,11 +2473,7 @@ def test_caltech_office():
         except:
             print("An error occurred, contuinuing with next data set!")
 
-
-if __name__ == "__main__":
-    # test_gaussian_mixture()
-    # test_split_data_uniform_vard()
-    # test_split_data_uniform_vark()
+if __name__ == "__main__": # test_gaussian_mixture() # test_split_data_uniform_vard() # test_split_data_uniform_vark()
     # test_split_data_uniform_varn()
     # test_split_data_uniform_visual()
     # test_constraint_ot()
@@ -2423,9 +2484,10 @@ if __name__ == "__main__":
     # test_moons_kplot()
     # test_satija()
     # test_caltech_office()
-    test_bio_data()
+    # test_bio_data()
     # test_bio_diag()
     # test_bio_diag2()
+    test_bio_diag3()
     # test_pancreas_data()
 
 #     ### Barycenter histogram test
