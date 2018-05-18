@@ -1487,13 +1487,15 @@ def test_domain_adaptation(sim_params, get_data):
         print("Running kmeans + OT for {}".format(params))
         (xs, xt, labs, labt) = data
         gammas = kmeans_transport(xs, xt, k)
-        if np.any(np.isnan(gamma_km)):
+        if any([np.any(np.isnan(gamma)) for gamma in gammas]):
             return(np.inf)
         else:
             # labt_pred_km = classify_ot(gamma_km, labs_ind, labs)
-            labt_preds_bary = [c.predict(bary_map(total_gamma(gammas), xs)) for c in classifiers]
-            labt_preds_map = [c.predict(map_from_clusters(xs, xt, gammas_k)) for c in classifiers]
-            return [class_err_combined(labt, labt_pred) for labt_pred in labt_preds]
+            gamma_tot = total_gamma(gammas)
+            expected_err = np.sum(gamma_tot * (labs.reshape(-1, 1) != labt.reshape(1, -1)))
+            labt_preds_bary = [c.predict(bary_map(gamma_tot, xs)) for c in classifiers]
+            labt_preds_map = [c.predict(map_from_clusters(xs, xt, gammas)) for c in classifiers]
+            return [expected_err] + [class_err_combined(labt, labt_pred) for labt_pred in labt_preds_bary] + [class_err_combined(labt, labt_pred) for labt_pred in labt_preds_map]
     
     # hubOT
     def hot_err(data, params, classifiers):
@@ -1694,7 +1696,7 @@ def test_domain_adaptation(sim_params, get_data):
     estimator_outlen = {
             "ot": len(nn_ks),
             "ot_entr": 1 + len(nn_ks),
-            "ot_kmeans": len(nn_ks),
+            "ot_kmeans": 1 + 2*len(nn_ks),
             "ot_2kbary": 1 + 2*len(nn_ks),
             "ot_kbary": 1 + 2*len(nn_ks),
             "ot_gl": len(nn_ks),
@@ -1857,19 +1859,22 @@ def test_opt_grid():
 def test_bio_data():
     global data_ind, labels, xs, xt, labs, labt
 
-    np.random.seed(42*42)
+    # np.random.seed(42*42)
+    np.random.seed(42**3)
 
     perclass = {"source": 100, "target": 100}
     samples = {"train": 20, "test": 20}
-    label_samples = [120, 80, 100]
+    label_samples = [100, 100, 100]
     # label_samples = [10, 10, 10, 10]
     # outfile = "pancreas.bin"
-    outfile = "haem2.bin"
+    outfile = "haem3.bin"
 
-    entr_regs = np.array([10.0])**np.linspace(-3, 0, 7)
+    # entr_regs = np.array([10.0])**np.linspace(-3, 0, 7)
+    entr_regs = np.array([10.0])**np.linspace(-2, -1, 3)
     # entr_regs = np.array([10.0])**range(-2, 0)
     # entr_regs = np.array([10.0])**range(-1, 0)
-    gl_params = np.array([10.0])**range(-3, 3)
+    # gl_params = np.array([10.0])**range(-3, 3)
+    gl_params = np.array([10.0])**range(-3, 1)
     # map_params1 = np.array([10.0])**range(-1,1)
     # map_params2 = np.array([10.0])**range(-1,1)
     # gl_params = np.array([10.0])**range(-3, 0)
@@ -1877,7 +1882,10 @@ def test_bio_data():
     # ks = np.array([2])**range(1, 8)
     # ks = np.array([10, 20, 30, 40, 50, 60, 70, 80])
     # ks = np.array([5, 10, 15, 20, 25, 30])
-    ks = np.array([3, 5, 10, 20, 30, 50])
+    # ks = np.array([3, 5, 10, 20, 30, 50])
+    # ks = np.array([3, 5, 10, 20, 30, 50])
+    ks = np.array([3, 6, 9, 12, 20, 30])
+    ds = np.array([10, 20, 30, 40, 50, 60, 60])
 
     # entr_regs = np.array([10.0])
     # gl_params = np.array([10.0])**range(4, 5)
@@ -1904,10 +1912,10 @@ def test_bio_data():
                 "function": "ot_kmeans",
                 "parameter_ranges": [ks]
                 },
-            "ot_2kbary": {
-                "function": "ot_2kbary",
-                "parameter_ranges": [entr_regs, ks]
-                },
+            # "ot_2kbary": {
+            #     "function": "ot_2kbary",
+            #     "parameter_ranges": [entr_regs, ks]
+            #     },
             "ot_kbary": {
                 "function": "ot_kbary",
                 "parameter_ranges": [entr_regs, ks]
@@ -1918,11 +1926,11 @@ def test_bio_data():
                 },
             "sa": {
                 "function": "sa",
-                "parameter_ranges": [ks]
+                "parameter_ranges": [ds]
                 },
             "tca": {
                 "function": "tca",
-                "parameter_ranges": [ks]
+                "parameter_ranges": [ds]
                 },
             # "coral": {
             #     "function": "coral",

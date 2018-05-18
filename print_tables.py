@@ -2,8 +2,8 @@ import pickle
 import numpy as np
 
 # ftype = "caltech"
-# ftype = "bio"
-ftype = "pancreas"
+ftype = "bio"
+# ftype = "pancreas"
 
 if ftype == "caltech":
     domain_names = ["amazon", "caltech10", "dslr", "webcam"]
@@ -57,7 +57,7 @@ if ftype == "pancreas":
                     # print(v)
 
 elif ftype == "bio":
-    infile = "pancreas.bin"
+    infile = "haem2.bin"
 
     print("-" * 30)
     print("Results for bio data:")
