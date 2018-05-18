@@ -819,7 +819,6 @@ def test_gaussian_mixture_varn():
 
     for (n_ind, n) in enumerate(ns):
         for sample in range(samples):
-            print("-"*30)
             print("Sample: {}".format(sample))
             for i in range(n):
                 c = np.random.choice(cluster_ids, p = prp)
@@ -843,8 +842,8 @@ def test_gaussian_mixture_varn():
             (zs, gammas) = kbarycenter(b1, b2, xs, xt, k, [1.0, 1.0], entr_reg, verbose = True,
                     warm_start = True, relax_outside = [np.inf, np.inf],
                     tol = 1e-4,
-                    inner_tol = 1e-5,
-                    max_iter = 500)
+                    inner_tol = 1e-6,
+                    max_iter = 200)
             # # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True)
             bary_cost = estimate_w2_cluster(xs, xt, gammas)
             print("Barycenter cost: {}".format(bary_cost))
