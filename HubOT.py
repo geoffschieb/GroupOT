@@ -3085,11 +3085,11 @@ if __name__ == "__main__":
     # test_gaussian_mixture_vark()
 
     # test_split_data_uniform_vard()
-    test_split_data_uniform_vark()
+    # test_split_data_uniform_vark()
     # test_split_data_uniform_varn()
     # test_split_data_uniform_visual()
 
-    # test_annulus_all()
+    test_annulus_all()
 
     # test_constraint_ot()
     # t0 = time.time()
