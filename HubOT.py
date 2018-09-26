@@ -671,9 +671,21 @@ def estimate_w2_middle(xs, xt, zs1, zs2, gammas, bias_correction = False, b0 = N
         centers2 = zs2 + avg2
         M = ot.dist(centers1, centers2)
         total_cost = np.sum(gammas[1] * M)
+
+#         a1 = np.sum(gammas[0], axis = 0)
+#         a2 = np.sum(gammas[-1], axis = 1)
+#         # print(a1)
+#         # print(a2)
+#         total_cost = ot.emd2(a1, a2, M)
     else:
         M = ot.dist(zs1, zs2)
         total_cost = np.sum(gammas[1] * M)
+
+        # a1 = np.sum(gammas[0], axis = 0)
+        # a2 = np.sum(gammas[-1], axis = 1)
+        # # print(a1)
+        # # print(a2)
+        # total_cost = ot.emd2(a1, a2, M)
 
     return total_cost
 
@@ -1121,14 +1133,25 @@ def test_split_data_uniform_vark():
         direction[0:2] = np.sign(x[0:2])
         return x + length * direction
 
-    ks = np.hstack([range(1,11), range(12,31,2), range(34, 71, 4), range(70, 10, 101)]).astype(int)
+    # ks = np.hstack([range(1,11), range(12,31,2), range(34, 71, 4), range(70, 10, 101)]).astype(int)
+    # ks = np.hstack([range(1,11), range(12,31,2), range(34, 71, 4), range(70, 10, 101)]).astype(int)
+    # ks = np.hstack([range(10,21,2)])
+    ks = [50]
     # ds = (np.array([2])**np.linspace(2, 8, 15)).astype(int)
     d = 30
     n = 10*d
-    samples = 20
+    samples = 1
+    middle_param = 0.1
+    entropy = 0.5
     results_vanilla = np.empty((samples, len(ks)))
     results_kbary = np.empty((samples, len(ks)))
+    results_cluster = np.empty((samples, len(ks)))
+    results_cluster_nocor = np.empty((samples, len(ks)))
+
     for (k_ind, k) in enumerate(ks):
+        print()
+        print("k = {}".format(k))
+        print()
         for sample in range(samples):
             samples_source = np.random.uniform(low=-1, high=1, size=(n, d))
             samples_target = np.random.uniform(low=-1, high=1, size=(n, d))
@@ -1143,16 +1166,22 @@ def test_split_data_uniform_vark():
             xs = samples_source
             xt = samples_target
 
-            (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, k, [1.0, 1.0], 1, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf])
+            (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, k, [1.0, 1.0], entropy, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf])
             # # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True)
             bary_cost = estimate_w2_cluster(samples_source, samples_target, gammas)
             results_kbary[sample, k_ind] = bary_cost
             print("Barycenter cost: {}".format(bary_cost))
 
+            (zs1, zs2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, k, k, [1.0, middle_param, 1.0], entropy, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf], inner_tol = 1e-12, tol = 1e-5)
+            cluster_cost = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = True)
+            cluster_cost_no_correction = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = False)
+            print("Double cluster cost: {}".format(cluster_cost))
+            print("Double cluster cost, no correction: {}".format(cluster_cost_no_correction))
+
     print(results_vanilla)
     print(results_kbary)
 
-    with open(os.path.join("uniform_results", "vark2.bin"), "wb") as f:
+    with open(os.path.join("uniform_results", "vark_trial.bin"), "wb") as f:
         pickle.dump({
             "d": d,
             "n": n,
@@ -1287,17 +1316,16 @@ def test_annulus_all():
     prefix = "annulus_results"
 
     # Varying k
-    # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
-    ks = np.hstack([range(1,11)]).astype(int)
+    ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
+    # ks = np.hstack([range(1,11)]).astype(int)
     # ks = [6]
     ds = np.repeat(100, len(ks))
     ns = np.repeat(1000, len(ks))
     middle_params = np.repeat(0.1, len(ks))
-    entropies = np.repeat(0.3, len(ks))
+    entropies = np.repeat(1.0, len(ks))
     samples = 20
     filename = "vark_middle_01.bin"
     test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
-
 
 def test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename):
     global results_vanilla, results_kbary
@@ -3057,11 +3085,11 @@ if __name__ == "__main__":
     # test_gaussian_mixture_vark()
 
     # test_split_data_uniform_vard()
-    # test_split_data_uniform_vark()
+    test_split_data_uniform_vark()
     # test_split_data_uniform_varn()
     # test_split_data_uniform_visual()
 
-    test_annulus_all()
+    # test_annulus_all()
 
     # test_constraint_ot()
     # t0 = time.time()
