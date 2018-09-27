@@ -59,12 +59,17 @@ def barycenter_bregman_chain(b_left, b_right, Ms, lambdas, entr_reg_final,
 
     warnings.filterwarnings("error")
     try:
+        if not hasattr(entr_reg_final, '__len__'):
+            entr_reg_final = np.repeat(entr_reg_final, len(Ms))
+        if not hasattr(entr_reg_start, '__len__'):
+            entr_reg_start = np.repeat(entr_reg_start, len(Ms))
+
         entr_reg = entr_reg_start if warm_start else entr_reg_final
         np.seterr(all="warn")
 
         alphas = [[np.zeros(M.shape[i]) for i in range(2)] for M in Ms]
 
-        Ks = [np.exp(-M/entr_reg) for M in Ms]
+        Ks = [np.exp(-M/entr_reg[i]) for (i, M) in enumerate(Ms)]
         Kts = [K.T.copy() for K in Ks]
 
         us = [[np.ones(K.shape[i]) for i in range(2)] for K in Ks]
@@ -79,11 +84,11 @@ def barycenter_bregman_chain(b_left, b_right, Ms, lambdas, entr_reg_final,
 
         def rebalance(i):
             for j in range(2):
-                alphas[i][j] += entr_reg * np.log(us[i][j])
+                alphas[i][j] += entr_reg[i] * np.log(us[i][j])
                 us[i][j] = np.ones(Ks[i].shape[j])
 
         def update_K(i):
-            Ks[i] = np.exp(-(Ms[i] - alphas[i][0].reshape(-1, 1) - alphas[i][1].reshape(1, -1))/entr_reg)
+            Ks[i] = np.exp(-(Ms[i] - alphas[i][0].reshape(-1, 1) - alphas[i][1].reshape(1, -1))/entr_reg[i])
             Kts[i] = Ks[i].T.copy()
 
         while not converged and its < max_iter: 
@@ -137,13 +142,13 @@ def barycenter_bregman_chain(b_left, b_right, Ms, lambdas, entr_reg_final,
             us_old = copy.deepcopy(us)
 
             if err < tol:
-                if not warm_start or abs(entr_reg - entr_reg_final) < 1e-12:
+                if not warm_start or max(abs(entr_reg - entr_reg_final)) < 1e-12:
                     converged = True
                 else:
                     for i in range(len(us)):
                         rebalance(i)
 
-                    entr_reg = max(entr_reg/5, entr_reg_final)
+                    entr_reg = np.maximum(entr_reg/5, entr_reg_final)
                     if verbose:
                     # if True:
                         print("New regularization parameter: {} at iteration {}".format(entr_reg, its))
@@ -218,8 +223,8 @@ def cluster_ot(b1, b2, xs, xt, k1, k2,
     np.seterr(all="warn")
 
     d = xs.shape[1]
-    # zs1  = 100 * np.random.normal(size = (k1, d))
-    # zs2  = 100 * np.random.normal(size = (k2, d))
+    # zs1  = 1 * np.random.normal(size = (k1, d))
+    # zs2  = 1 * np.random.normal(size = (k2, d))
     zs1 = KMeans(n_clusters = k1).fit(xs).cluster_centers_
     zs2 = KMeans(n_clusters = k2).fit(xt).cluster_centers_
 
@@ -1315,17 +1320,17 @@ def test_split_data_uniform_visual():
 def test_annulus_all():
     prefix = "annulus_results"
 
-#     # Varying k, mid = 0.1
-#     ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
-#     # ks = np.hstack([range(1,11)]).astype(int)
-#     # ks = [6]
-#     ds = np.repeat(100, len(ks))
-#     ns = np.repeat(1000, len(ks))
-#     middle_params = np.repeat(0.1, len(ks))
-#     entropies = np.repeat(1.0, len(ks))
-#     samples = 20
-#     filename = "vark_middle_01.bin"
-#     test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
+    # Varying k, mid = 0.1
+    ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
+    # ks = np.hstack([range(1,11)]).astype(int)
+    # ks = [6]
+    ds = np.repeat(100, len(ks))
+    ns = np.repeat(1000, len(ks))
+    middle_params = np.repeat(0.1, len(ks))
+    entropies = np.repeat(1.0, len(ks))
+    samples = 10
+    filename = "vark_middle_01.bin"
+    test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
 
     # Varying k, mid = 1.0
     ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
@@ -1351,7 +1356,34 @@ def test_annulus_all():
     filename = "vark_middle_10.bin"
     test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
 
-def test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename):
+#     # Pictures
+#     # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
+#     # ks = np.hstack([range(1,11)]).astype(int)
+#     ks = [10]
+#     ds = np.repeat(2, len(ks))
+#     ns = np.repeat(100, len(ks))
+#     middle_params = np.repeat(10.0, len(ks))
+#     entropies = np.repeat(0.3, len(ks))
+#     samples = 1
+#     filename = "dummy.bin"
+#     test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
+
+    # # Varying n, mid = 1.0
+    # ns = (np.array([10.0])**np.linspace(1.7, 3, 20)).astype(int)
+    # ks = np.repeat(10, len(ns))
+    # # ks = np.hstack([range(1,11)]).astype(int)
+    # # ks = [6]
+    # ds = np.repeat(30, len(ks))
+    # middle_params = np.repeat(1.0, len(ks))
+    # entropies = np.repeat(1.0, len(ks))
+    # samples = 20
+    # filename = "varn_middle_1.bin"
+    # test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
+
+def test_annulus(ks, ds, ns,
+        middle_params, entropies, samples, prefix,
+        filename, visual = False, figsize = (6,4)
+        ):
     global results_vanilla, results_kbary
 
     def transport_map(x, length = 1):
@@ -1419,7 +1451,7 @@ def test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename
             # cluster_cost = estimate_w2_cluster(samples_source, samples_target, gammas)
             # print("Cluster cost: {}".format(cluster_cost))
 
-            (zs1, zs2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, k, k, [1.0, middle_param, 1.0], entropy, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf], inner_tol = 1e-7, tol = 1e-6)
+            (zs1, zs2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, k, k, [1.0, middle_param, 1.0], np.array([entropy, entropy/10, entropy]), verbose = True, warm_start = False, relax_outside = [np.inf, np.inf], inner_tol = 1e-6, tol = 1e-5)
             cluster_cost = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = True)
             cluster_cost_no_correction = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = False)
             cluster_cost_old = estimate_w2_cluster(samples_source, samples_target, gammas)
@@ -1435,16 +1467,18 @@ def test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename
             # print(zs1)
             # print(zs2)
 
-            # # hubOT plot
-            # pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
-            # pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
-            # pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
-            # pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
-            # ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
-            # ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
-            # ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
-            # # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
-            # pl.show()
+            if visual:
+                # hubOT plot
+                pl.figure(figsize = figsize)
+                pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+                pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+                pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
+                pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
+                ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
+                ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
+                ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
+                # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
+                pl.savefig(os.path.join("Figures","Annulus_hubot.png"), dpi = 300)
 
             (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, k, [1.0, 1.0], entropy, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf])
             # # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True)
@@ -1457,27 +1491,30 @@ def test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename
             results_kmeans[sample, k_ind] = kmeans_cost
             print("Kmeans cost: {}".format(kmeans_cost))
 
-            # # Barycenter plot
-            # pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
-            # pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
-            # pl.plot(zs[:, 0], zs[:, 1], '<c', label='Mid')
-            # ot.plot.plot2D_samples_mat(xs, zs, gammas[0], c=[.5, .5, 1])
-            # ot.plot.plot2D_samples_mat(zs, xt, gammas[1], c=[.5, .5, .5])
-            # # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
-            # pl.show()
+            if visual:
+                # Barycenter plot
+                pl.figure(figsize = figsize)
+                pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+                pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+                pl.plot(zs[:, 0], zs[:, 1], '<c', label='Mid')
+                ot.plot.plot2D_samples_mat(xs, zs, gammas[0], c=[.5, .5, 1])
+                ot.plot.plot2D_samples_mat(zs, xt, gammas[1], c=[.5, .5, .5])
+                # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
+                pl.savefig(os.path.join("Figures", "Annulus_kbary.png"), dpi = 300)
 
-    mkdir(prefix)
-    with open(os.path.join(prefix, filename), "wb") as f:
-        pickle.dump({
-            "ds": ds,
-            "ns": ns,
-            "ks": ks,
-            "results_vanilla": results_vanilla,
-            "results_kbary": results_kbary,
-            "results_kmeans" : results_kmeans,
-            "results_hubot" : results_cluster_ot,
-            "results_hubot_nocor" : results_cluster_ot_nocor,
-            }, f)
+    if not visual:
+        mkdir(prefix)
+        with open(os.path.join(prefix, filename), "wb") as f:
+            pickle.dump({
+                "ds": ds,
+                "ns": ns,
+                "ks": ks,
+                "results_vanilla": results_vanilla,
+                "results_kbary": results_kbary,
+                "results_kmeans" : results_kmeans,
+                "results_hubot" : results_cluster_ot,
+                "results_hubot_nocor" : results_cluster_ot_nocor,
+                }, f)
 
 def test_split_data_uniform_vard():
     global ds, results_vanilla, results_kbary
