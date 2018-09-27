@@ -1315,16 +1315,40 @@ def test_split_data_uniform_visual():
 def test_annulus_all():
     prefix = "annulus_results"
 
-    # Varying k
+#     # Varying k, mid = 0.1
+#     ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
+#     # ks = np.hstack([range(1,11)]).astype(int)
+#     # ks = [6]
+#     ds = np.repeat(100, len(ks))
+#     ns = np.repeat(1000, len(ks))
+#     middle_params = np.repeat(0.1, len(ks))
+#     entropies = np.repeat(1.0, len(ks))
+#     samples = 20
+#     filename = "vark_middle_01.bin"
+#     test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
+
+    # Varying k, mid = 1.0
     ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
     # ks = np.hstack([range(1,11)]).astype(int)
     # ks = [6]
     ds = np.repeat(100, len(ks))
     ns = np.repeat(1000, len(ks))
-    middle_params = np.repeat(0.1, len(ks))
+    middle_params = np.repeat(1.0, len(ks))
     entropies = np.repeat(1.0, len(ks))
     samples = 20
-    filename = "vark_middle_01.bin"
+    filename = "vark_middle_1.bin"
+    test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
+
+    # Varying k, mid = 10.0
+    ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
+    # ks = np.hstack([range(1,11)]).astype(int)
+    # ks = [6]
+    ds = np.repeat(100, len(ks))
+    ns = np.repeat(1000, len(ks))
+    middle_params = np.repeat(10.0, len(ks))
+    entropies = np.repeat(1.0, len(ks))
+    samples = 20
+    filename = "vark_middle_10.bin"
     test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
 
 def test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename):
