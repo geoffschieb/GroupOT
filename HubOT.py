@@ -487,8 +487,8 @@ def cluster_ot_map(b1, b2, xs, xt, k,
     d = xs.shape[1]
     # zs1 = np.random.normal(size = (k, d))
     # zs2 = np.random.normal(size = (k, d))
-    zs1 = KMeans(n_clusters = k1).fit(xs).cluster_centers_
-    zs2 = KMeans(n_clusters = k2).fit(xt).cluster_centers_
+    zs1 = KMeans(n_clusters = k).fit(xs).cluster_centers_
+    zs2 = KMeans(n_clusters = k).fit(xt).cluster_centers_
     lambdas_barycenter = [lambdas[0], lambdas[2]]
     dist_weight = float(lambdas[1])/lambdas[0]
 
