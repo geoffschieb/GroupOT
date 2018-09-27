@@ -1341,7 +1341,7 @@ def test_annulus_all():
     ns = np.repeat(1000, len(ks))
     middle_params = np.repeat(0.1, len(ks))
     entropies = np.repeat(1.0, len(ks))
-    samples = 20
+    samples = 5
     filename = "vark_middle_01.bin"
     test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
 
@@ -1353,7 +1353,7 @@ def test_annulus_all():
     ns = np.repeat(1000, len(ks))
     middle_params = np.repeat(1.0, len(ks))
     entropies = np.repeat(1.0, len(ks))
-    samples = 10
+    samples = 5
     filename = "vark_middle_1.bin"
     test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
 
@@ -1365,7 +1365,7 @@ def test_annulus_all():
     ns = np.repeat(1000, len(ks))
     middle_params = np.repeat(10.0, len(ks))
     entropies = np.repeat(1.0, len(ks))
-    samples = 10
+    samples = 5
     filename = "vark_middle_10.bin"
     test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
 
