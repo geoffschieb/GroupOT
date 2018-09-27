@@ -272,6 +272,19 @@ def cluster_ot(b1, b2, xs, xt, k1, k2,
         # if relax_inside[0] != np.float("Inf"):
         #     cost += lambdas[0] * relax_inside[0] * kl_div_vec(np.sum(gammas[0], axis = 0, 
 
+#         # hubOT plot
+#         pl.figure(figsize = (6,4))
+#         pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+#         pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+#         pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
+#         pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
+#         ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
+#         ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
+#         ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
+#         # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
+#         mkdir(os.path.join("Figures","iterations"))
+#         pl.savefig(os.path.join("Figures","iterations","{}.png".format(its)), dpi = 300)
+
         err = np.abs(cost - cost_old)/max(np.abs(cost), 1e-12)
         if verbose:
             print("Alternating barycenter relative error: {}".format(err))
@@ -498,7 +511,7 @@ def cluster_ot_map(b1, b2, xs, xt, k,
         if err < tol:
             converged = True
 
-    return (zs1, zs2, np.sum(gammas[1], axis = 1), gammas)
+    return (zs1, zs2, gammas)
 
 def nearest_points(M):
     gamma = np.zeros_like(M)
@@ -1321,14 +1334,14 @@ def test_annulus_all():
     prefix = "annulus_results"
 
     # Varying k, mid = 0.1
-    ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
+    # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
     # ks = np.hstack([range(1,11)]).astype(int)
-    # ks = [6]
+    ks = [6]
     ds = np.repeat(100, len(ks))
     ns = np.repeat(1000, len(ks))
     middle_params = np.repeat(0.1, len(ks))
     entropies = np.repeat(1.0, len(ks))
-    samples = 10
+    samples = 20
     filename = "vark_middle_01.bin"
     test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
 
@@ -1356,17 +1369,17 @@ def test_annulus_all():
     filename = "vark_middle_10.bin"
     test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
 
-#     # Pictures
-#     # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
-#     # ks = np.hstack([range(1,11)]).astype(int)
-#     ks = [10]
-#     ds = np.repeat(2, len(ks))
-#     ns = np.repeat(100, len(ks))
-#     middle_params = np.repeat(10.0, len(ks))
-#     entropies = np.repeat(0.3, len(ks))
-#     samples = 1
-#     filename = "dummy.bin"
-#     test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
+    # # Pictures
+    # # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
+    # # ks = np.hstack([range(1,11)]).astype(int)
+    # ks = [10]
+    # ds = np.repeat(2, len(ks))
+    # ns = np.repeat(100, len(ks))
+    # middle_params = np.repeat(0.05, len(ks))
+    # entropies = np.repeat(0.3, len(ks))
+    # samples = 1
+    # filename = "dummy.bin"
+    # test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
 
     # # Varying n, mid = 1.0
     # ns = (np.array([10.0])**np.linspace(1.7, 3, 20)).astype(int)
@@ -1406,6 +1419,8 @@ def test_annulus(ks, ds, ns,
     results_kmeans = np.empty((samples, len(ds)))
     results_cluster_ot = np.empty((samples, len(ds)))
     results_cluster_ot_nocor = np.empty((samples, len(ds)))
+    results_cluster_ot_map = np.empty((samples, len(ds)))
+    results_cluster_ot_map_nocor = np.empty((samples, len(ds)))
 
     # for (d_ind, d) in enumerate(ds):
     for (k_ind, k) in enumerate(ks):
@@ -1467,18 +1482,40 @@ def test_annulus(ks, ds, ns,
             # print(zs1)
             # print(zs2)
 
+#             if visual:
+#                 # hubOT plot
+#                 pl.figure(figsize = figsize)
+#                 pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+#                 pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+#                 pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
+#                 pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
+#                 ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
+#                 ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
+#                 ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
+#                 # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
+#                 pl.savefig(os.path.join("Figures","Annulus_hubot.png"), dpi = 300)
+
+
+            (zs1, zs2, gammas) = cluster_ot_map(b1, b2, samples_source, samples_target, k, [1.0, middle_param, 1.0], entropy, verbose = True)
+            cluster_cost_map = estimate_w2_middle(samples_source, samples_target, zs1, zs2, [gammas[0], np.eye(k)/k, gammas[1]], bias_correction = True)
+            cluster_cost_map_nocor = estimate_w2_middle(samples_source, samples_target, zs1, zs2, [gammas[0], np.eye(k)/k, gammas[1]], bias_correction = False)
+            print("Map cluster cost: {}".format(cluster_cost_map))
+            print("Map cluster cost, no correction: {}".format(cluster_cost_map_nocor))
+            results_cluster_ot_map[sample, k_ind] = cluster_cost_map
+            results_cluster_ot_map_nocor[sample, k_ind] = cluster_cost_map_nocor
+
             if visual:
-                # hubOT plot
+                # map plot
                 pl.figure(figsize = figsize)
                 pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
                 pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
                 pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
                 pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
                 ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
-                ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
-                ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
+                ot.plot.plot2D_samples_mat(zs1, zs2, np.eye(k), c=[.5, .5, .5])
+                ot.plot.plot2D_samples_mat(zs2, xt, gammas[1], c=[1, .5, .5])
                 # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
-                pl.savefig(os.path.join("Figures","Annulus_hubot.png"), dpi = 300)
+                pl.savefig(os.path.join("Figures","Annulus_map.png"), dpi = 300)
 
             (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, k, [1.0, 1.0], entropy, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf])
             # # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True)
@@ -1514,6 +1551,8 @@ def test_annulus(ks, ds, ns,
                 "results_kmeans" : results_kmeans,
                 "results_hubot" : results_cluster_ot,
                 "results_hubot_nocor" : results_cluster_ot_nocor,
+                "results_hubot_map" : results_cluster_ot_map,
+                "results_hubot_map_nocor" : results_cluster_ot_map_nocor,
                 }, f)
 
 def test_split_data_uniform_vard():
