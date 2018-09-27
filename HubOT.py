@@ -485,8 +485,10 @@ def cluster_ot_map(b1, b2, xs, xt, k,
     converged = False
 
     d = xs.shape[1]
-    zs1 = np.random.normal(size = (k, d))
-    zs2 = np.random.normal(size = (k, d))
+    # zs1 = np.random.normal(size = (k, d))
+    # zs2 = np.random.normal(size = (k, d))
+    zs1 = KMeans(n_clusters = k1).fit(xs).cluster_centers_
+    zs2 = KMeans(n_clusters = k2).fit(xt).cluster_centers_
     lambdas_barycenter = [lambdas[0], lambdas[2]]
     dist_weight = float(lambdas[1])/lambdas[0]
 
@@ -1349,7 +1351,7 @@ def test_annulus_all():
     ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
     # ks = np.hstack([range(1,11)]).astype(int)
     # ks = [6]
-    ds = np.repeat(100, len(ks))
+    ds = np.repeat(30, len(ks))
     ns = np.repeat(1000, len(ks))
     middle_params = np.repeat(1.0, len(ks))
     entropies = np.repeat(1.0, len(ks))
