@@ -1503,11 +1503,11 @@ def test_annulus_all():
 
     d = 30
     n = 1000
-    # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
-    ks = [10]
+    ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
+    # ks = [10]
     entropies_l = [0.1, 1.0]
-    middle_params_l = [0.1, 1.0, 10.0]
-    samples = 1
+    middle_params_l = [0.5, 1.0, 2.0]
+    samples = 20
 
     # Varying
     for entropy in entropies_l:
