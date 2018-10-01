@@ -51,7 +51,7 @@ def barycenter_bregman_chain(b_left, b_right, Ms, lambdas, entr_reg_final,
         relax_inside = [np.float("Inf"), np.float("Inf")], # TODO This should adapt to the size of Ms
         verbose = False,
         tol = 1e-7,
-        max_iter = 500,
+        max_iter = 1000,
         rebalance_thresh = 1e3,
         warm_start = False,
         entr_reg_start = 1000.0
@@ -148,7 +148,7 @@ def barycenter_bregman_chain(b_left, b_right, Ms, lambdas, entr_reg_final,
                     for i in range(len(us)):
                         rebalance(i)
 
-                    entr_reg = np.maximum(entr_reg/5, entr_reg_final)
+                    entr_reg = np.maximum(entr_reg/2, entr_reg_final)
                     if verbose:
                     # if True:
                         print("New regularization parameter: {} at iteration {}".format(entr_reg, its))
@@ -170,27 +170,41 @@ def barycenter_bregman_chain(b_left, b_right, Ms, lambdas, entr_reg_final,
 def update_points(xs, xt, zs1, zs2, gammas, lambdas,
         tol = 1e-10,
         max_iter = 50,
-        verbose = False):
+        verbose = False,
+        no_iteration = False
+        ):
 
     converged = False
     its = 0
 
     weights = [(lambdas[0] * np.sum(gammas[0], axis = 0) + lambdas[1] * np.sum(gammas[1], axis = 1)),
-            (lambdas[1] * np.sum(gammas[1], axis = 0) + lambdas[2] * np.sum(gammas[2], axis = 1))]
-
+                (lambdas[1] * np.sum(gammas[1], axis = 0) + lambdas[2] * np.sum(gammas[2], axis = 1))]
     point_avgs = [lambdas[0] * np.dot(xs.T, gammas[0]).T, lambdas[2] * np.dot(gammas[2], xt)]
 
-    while not converged and its < max_iter:
-        its += 1
-        zs1_old = zs1.copy()
-        zs2_old = zs2.copy()
-        zs1 = (point_avgs[0] + lambdas[1] * np.dot(gammas[1], zs2))/weights[0].reshape(-1, 1)
-        zs2 = (lambdas[1] * np.dot(zs1.T, gammas[1]).T + point_avgs[1])/weights[1].reshape(-1, 1)
-        err = sum([np.linalg.norm(z-z_old, "fro")/np.linalg.norm(z, "fro") for (z, z_old) in [(zs1, zs1_old), (zs2, zs2_old)]])
+    if no_iteration:
+        (k, d) = zs1.shape
+        A = np.zeros(shape = (2*k*d, 2*k*d))
+        A[0:k*d, 0:k*d] = np.kron(np.diag(weights[0]), np.eye(d))
+        A[0:k*d, k*d:] = -np.kron(np.diag(lambdas[1] * np.sum(gammas[1], axis = 1)), np.eye(d))
+        A[k*d:, k*d:] = np.kron(np.diag(weights[1]), np.eye(d))
+        A[k*d:, 0:k*d] = -np.kron(np.diag(lambdas[1] * np.sum(gammas[1], axis = 0)), np.eye(d))
+        b = np.vstack([point_avgs[0].reshape(k*d, 1), point_avgs[1].reshape(k*d, 1)])
+        zs_new = np.linalg.solve(A, b).reshape((d, 2*k), order = 'F')
+        zs1 = zs_new[:,0:k].T
+        zs2 = zs_new[:,k:].T
 
-        if err < tol:
-            converged = True
-            # print("Total inner iterations: {}".format(its))
+    else:
+        while not converged and its < max_iter:
+            its += 1
+            zs1_old = zs1.copy()
+            zs2_old = zs2.copy()
+            zs1 = (point_avgs[0] + lambdas[1] * np.dot(gammas[1], zs2))/weights[0].reshape(-1, 1)
+            zs2 = (lambdas[1] * np.dot(zs1.T, gammas[1]).T + point_avgs[1])/weights[1].reshape(-1, 1)
+            err = sum([np.linalg.norm(z-z_old, "fro")/np.linalg.norm(z, "fro") for (z, z_old) in [(zs1, zs1_old), (zs2, zs2_old)]])
+
+            if err < tol:
+                converged = True
+                # print("Total inner iterations: {}".format(its))
 
     return (zs1, zs2)
 
@@ -206,7 +220,7 @@ def cluster_ot(b1, b2, xs, xt, k1, k2,
         tol = 1e-4,
         inner_tol = 1e-5,
         max_iter = 1000,
-        inner_max_iter = 1000,
+        inner_max_iter = 2000,
         verbose = False,
         debug = False,
         warm_start = False,
@@ -216,7 +230,10 @@ def cluster_ot(b1, b2, xs, xt, k1, k2,
         inner_tol_fact = 0.1,
         inner_tol_start = 1e-3,
         inner_tol_dec_every = 20,
-        entr_reg_start = 1000.0
+        entr_reg_start = 1000.0,
+        zs1_start = None,
+        zs2_start = None,
+        gammas_start = None
         ):
 
     converged = False
@@ -225,8 +242,16 @@ def cluster_ot(b1, b2, xs, xt, k1, k2,
     d = xs.shape[1]
     # zs1  = 1 * np.random.normal(size = (k1, d))
     # zs2  = 1 * np.random.normal(size = (k2, d))
-    zs1 = KMeans(n_clusters = k1).fit(xs).cluster_centers_
-    zs2 = KMeans(n_clusters = k2).fit(xt).cluster_centers_
+    if zs1_start is None:
+        zs1 = KMeans(n_clusters = k1).fit(xs).cluster_centers_
+    else:
+        zs1 = zs1_start
+    if zs2_start is None:
+        zs2 = KMeans(n_clusters = k2).fit(xt).cluster_centers_
+    else:
+        zs2 = zs2_start
+    gammas = gammas_start if gammas_start is not None else None
+
 
     if debug:
         zs1_l = [zs1]
@@ -245,7 +270,7 @@ def cluster_ot(b1, b2, xs, xt, k1, k2,
             inner_tol_actual = max(inner_tol, inner_tol_actual)
         if verbose:
             print("Alternating barycenter iteration: {}".format(its))
-        if its > 1:
+        if its > 1 or gammas is not None:
             (zs1, zs2) = update_points(xs, xt, zs1, zs2, gammas, lambdas, verbose = False)
             if debug:
                 zs1_l.append(zs1)
@@ -272,18 +297,19 @@ def cluster_ot(b1, b2, xs, xt, k1, k2,
         # if relax_inside[0] != np.float("Inf"):
         #     cost += lambdas[0] * relax_inside[0] * kl_div_vec(np.sum(gammas[0], axis = 0, 
 
-#         # hubOT plot
-#         pl.figure(figsize = (6,4))
-#         pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
-#         pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
-#         pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
-#         pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
-#         ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
-#         ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
-#         ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
-#         # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
-#         mkdir(os.path.join("Figures","iterations"))
-#         pl.savefig(os.path.join("Figures","iterations","{}.png".format(its)), dpi = 300)
+        # # hubOT plot
+        # pl.figure(figsize = (6,4))
+        # pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+        # pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+        # pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
+        # pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
+        # ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
+        # ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
+        # ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
+        # # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
+        # mkdir(os.path.join("Figures","iterations"))
+        # pl.savefig(os.path.join("Figures","iterations","{}.png".format(its)), dpi = 300)
+        # pl.close('all')
 
         err = np.abs(cost - cost_old)/max(np.abs(cost), 1e-12)
         if verbose:
@@ -479,7 +505,8 @@ def update_points_map(xs, xt, zs1, zs2, gammas, lambdas,
 def cluster_ot_map(b1, b2, xs, xt, k,
         lambdas, entr_reg,
         tol = 1e-4, max_iter = 1000,
-        verbose = True
+        verbose = True,
+        warm_start = True
         ):
     
     converged = False
@@ -489,6 +516,8 @@ def cluster_ot_map(b1, b2, xs, xt, k,
     # zs2 = np.random.normal(size = (k, d))
     zs1 = KMeans(n_clusters = k).fit(xs).cluster_centers_
     zs2 = KMeans(n_clusters = k).fit(xt).cluster_centers_
+    assignment = ot.emd(np.ones(k), np.ones(k), ot.dist(zs1, zs2))
+    zs2 = zs2[np.nonzero(assignment > 0.5)[1]]
     lambdas_barycenter = [lambdas[0], lambdas[2]]
     dist_weight = float(lambdas[1])/lambdas[0]
 
@@ -503,7 +532,7 @@ def cluster_ot_map(b1, b2, xs, xt, k,
             (zs1, zs2) = update_points_map(xs, xt, zs1, zs2, gammas, lambdas, verbose = False)
 
         Ms = [ot.dist(xs, zs1) + dist_weight*np.sum((zs2 - zs1)**2, axis = 1).reshape(1,-1), ot.dist(zs2, xt)]
-        gammas = barycenter_bregman_chain(b1, b2, Ms, lambdas_barycenter, entr_reg, verbose = False)
+        gammas = barycenter_bregman_chain(b1, b2, Ms, lambdas_barycenter, entr_reg, verbose = False, warm_start = warm_start)
         cost = np.sum([lambdas_barycenter[i] * (np.sum(gammas[i] * Ms[i]) + entr_reg * stats.entropy(gammas[i].reshape(-1))) for i in range(2)])
 
         err = np.abs(cost - cost_old)/max(np.abs(cost), 1e-12)
@@ -526,9 +555,12 @@ def nearest_points_reg(a, M, entr_reg):
     K = np.exp(-M/entr_reg)
     return np.divide(a, np.sum(K, axis = 1)).reshape(-1, 1) * K
 
-def reweighted_clusters(xs, xt, k, lambdas, entr_reg,
+def reweighted_clusters(b1, b2, xs, xt, k, lambdas, entr_reg,
         tol = 1e-10,
-        lb = 0):
+        lb = 0,
+        equal_weights = False,
+        ):
+
     converged = False
 
     d = xs.shape[1]
@@ -537,7 +569,9 @@ def reweighted_clusters(xs, xt, k, lambdas, entr_reg,
     zs1 = KMeans(n_clusters = k).fit(xs).cluster_centers_
     zs2 = KMeans(n_clusters = k).fit(xt).cluster_centers_
     its = 0
-    unif = np.ones(k)/k
+    unif_middle = np.ones(k)/k
+    # unif_left = np.ones(xs.shape[0])/xs.shape[0]
+    # unif_right = np.ones(xt.shape[0])/xt.shape[0]
     cost_old = np.float("Inf")
 
     while not converged:
@@ -547,13 +581,17 @@ def reweighted_clusters(xs, xt, k, lambdas, entr_reg,
         Ms = [ot.dist(xs, zs1), ot.dist(zs1, zs2), ot.dist(zs2, xt)]
         # gamma_left = nearest_points(Ms[0])
         # gamma_right = nearest_points(Ms[2].T).T
-        if lb == 0:
-            gamma_left = nearest_points_reg(np.ones(Ms[0].shape[0])/Ms[0].shape[0], Ms[0], entr_reg)
-            gamma_right = nearest_points_reg(np.ones(Ms[2].shape[1])/Ms[2].shape[1], Ms[2].T, entr_reg).T
+        if equal_weights:
+            gamma_left = ot.sinkhorn(b1, unif_middle, Ms[0], entr_reg)
+            gamma_right = ot.sinkhorn(unif_middle, b2, Ms[2], entr_reg)
+        elif lb == 0:
+            gamma_left = nearest_points_reg(b1, Ms[0], entr_reg)
+            gamma_right = nearest_points_reg(b2, Ms[2].T, entr_reg).T
         else:
-            gamma_left = constraint_ot(np.ones(Ms[0].shape[0])/Ms[0].shape[0], lb, Ms[0], entr_reg)
-            gamma_right = constraint_ot(np.ones(Ms[2].shape[1])/Ms[2].shape[1], lb, Ms[2].T, entr_reg).T
-        gamma_middle = ot.sinkhorn(unif, unif, Ms[1], entr_reg)
+            gamma_left = constraint_ot(b1, lb, Ms[0], entr_reg)
+            gamma_right = constraint_ot(b2, lb, Ms[2].T, entr_reg).T
+        # gamma_middle = ot.sinkhorn(unif, unif, Ms[1], entr_reg)
+        gamma_middle = ot.emd(unif_middle, unif_middle, Ms[1])
         gammas = [gamma_left, gamma_middle, gamma_right]
 
         # cost = np.sum([lambdas[i] * np.sum(gammas[i] * Ms[i]) for i in range(3)]) + lambdas[1] * entr_reg * stats.entropy(gammas[1].reshape(-1,1))
@@ -1145,6 +1183,130 @@ def test_gaussian_mixture_vark():
             "results_kmeans": results_kmeans,
             }, f)
 
+
+def test_split_data_uniform_all():
+    prefix = "split_cube_results"
+
+    # Varying k, mid = 0.1
+    # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
+    # ks = np.hstack([range(1,11)]).astype(int)
+    ks = [4]
+    ds = np.repeat(100, len(ks))
+    ns = np.repeat(1000, len(ks))
+    middle_params = np.repeat(2, len(ks))
+    entropies = np.repeat(1.0, len(ks))
+    samples = 1
+    filename = "vark_middle_01.bin"
+    test_split_data_uniform(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
+
+    # # Varying k, mid = 1.0
+    # # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
+    # # ks = np.hstack([range(1,11)]).astype(int)
+    # ks = [10]
+    # ds = np.repeat(30, len(ks))
+    # ns = np.repeat(1000, len(ks))
+    # middle_params = np.repeat(1.0, len(ks))
+    # entropies = np.repeat(1.0, len(ks))
+    # samples = 1
+    # filename = "vark_middle_1_2.bin"
+    # test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
+
+#     # Varying k, mid = 10.0
+#     ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
+#     # ks = np.hstack([range(1,11)]).astype(int)
+#     # ks = [6]
+#     ds = np.repeat(100, len(ks))
+#     ns = np.repeat(1000, len(ks))
+#     middle_params = np.repeat(10.0, len(ks))
+#     entropies = np.repeat(1.0, len(ks))
+#     samples = 5
+#     filename = "vark_middle_10.bin"
+#     test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
+
+    # # Pictures
+    # # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
+    # # ks = np.hstack([range(1,11)]).astype(int)
+    # ks = [20]
+    # ds = np.repeat(2, len(ks))
+    # ns = np.repeat(100, len(ks))
+    # middle_params = np.repeat(1.0, len(ks))
+    # entropies = np.repeat(0.1, len(ks))
+    # samples = 1
+    # filename = "dummy.bin"
+    # test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
+
+    # # Varying n, mid = 1.0
+    # ns = (np.array([10.0])**np.linspace(1.7, 3, 20)).astype(int)
+    # ks = np.repeat(10, len(ns))
+    # # ks = np.hstack([range(1,11)]).astype(int)
+    # # ks = [6]
+    # ds = np.repeat(30, len(ks))
+    # middle_params = np.repeat(1.0, len(ks))
+    # entropies = np.repeat(1.0, len(ks))
+    # samples = 20
+    # filename = "varn_middle_1.bin"
+    # test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
+
+def test_split_data_uniform(ks, ds, ns, middle_params, entropies, samples, prefix, filename):
+
+    def transport_map(x, length = 1):
+        direction = np.zeros_like(x)
+        direction[0:2] = np.sign(x[0:2])
+        return x + length * direction
+
+    results_vanilla = np.empty((samples, len(ks)))
+    results_kbary = np.empty((samples, len(ks)))
+    results_cluster = np.empty((samples, len(ks)))
+    results_cluster_nocor = np.empty((samples, len(ks)))
+
+    for (ind, k) in enumerate(ks):
+        d = ds[ind]
+        n = ns[ind]
+        entropy = entropies[ind]
+        middle_param = middle_params[ind]
+        print()
+        print("k = {}, d = {}, n = {}, entropy = {}, middle_param = {}".format(k, d, n, entropy, middle_param))
+        print()
+        for sample in range(samples):
+            samples_source = np.random.uniform(low=-1, high=1, size=(n, d))
+            samples_target = np.random.uniform(low=-1, high=1, size=(n, d))
+            samples_target = np.apply_along_axis(lambda x: transport_map(x, 2), 1, samples_target)
+            
+            b1 = np.ones(samples_target.shape[0])/samples_target.shape[0]
+            b2 = np.ones(samples_source.shape[0])/samples_source.shape[0]
+            cost = ot.sinkhorn2(b1, b2, ot.dist(samples_source, samples_target), 1)
+            results_vanilla[sample, ind] = cost
+            print("Sinkhorn: {}".format(cost))
+
+            xs = samples_source
+            xt = samples_target
+
+            (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, k, [1.0, 1.0], entropy, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf])
+            # # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True)
+            bary_cost = estimate_w2_cluster(samples_source, samples_target, gammas)
+            results_kbary[sample, ind] = bary_cost
+            print("Barycenter cost: {}".format(bary_cost))
+
+            (zs1, zs2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, k, k, [1.0, middle_param, 1.0], entropy, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf], inner_tol = 1e-12, tol = 1e-5)
+            cluster_cost = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = True)
+            cluster_cost_no_correction = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = False)
+            print("Double cluster cost: {}".format(cluster_cost))
+            print("Double cluster cost, no correction: {}".format(cluster_cost_no_correction))
+
+    print(results_vanilla)
+    print(results_kbary)
+
+    with open(os.path.join(prefix, filename), "wb") as f:
+        pickle.dump({
+            "ds": ds,
+            "ns": ns,
+            "ks": ks,
+            "entropies": entropies,
+            "middle_params": middle_params,
+            "results_vanilla": results_vanilla,
+            "results_kbary": results_kbary
+            }, f)
+
 def test_split_data_uniform_vark():
     global ds, results_vanilla, results_kbary
 
@@ -1331,57 +1493,58 @@ def test_split_data_uniform_visual():
     pl.plot(*xt_emb.T, 'xr', label='Target samples')
     plot_transport_map(xt_emb, newsource)
     pl.savefig(os.path.join("Figures","Hypercube_kOT.png"), dpi = 300)
+    pl.close()
 
 def test_annulus_all():
     prefix = "annulus_results"
 
-    # Varying k, mid = 0.1
-    # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
-    # ks = np.hstack([range(1,11)]).astype(int)
-    ks = [6]
-    ds = np.repeat(100, len(ks))
-    ns = np.repeat(1000, len(ks))
-    middle_params = np.repeat(0.1, len(ks))
-    entropies = np.repeat(1.0, len(ks))
-    samples = 5
-    filename = "vark_middle_01.bin"
-    test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
-
-    # Varying k, mid = 1.0
-    ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
-    # ks = np.hstack([range(1,11)]).astype(int)
+    # # Varying k, mid = 0.1
+    # # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
+    # # ks = np.hstack([range(1,11)]).astype(int)
     # ks = [6]
-    ds = np.repeat(30, len(ks))
-    ns = np.repeat(1000, len(ks))
-    middle_params = np.repeat(1.0, len(ks))
-    entropies = np.repeat(1.0, len(ks))
-    samples = 5
-    filename = "vark_middle_1.bin"
-    test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
+    # ds = np.repeat(100, len(ks))
+    # ns = np.repeat(1000, len(ks))
+    # middle_params = np.repeat(0.1, len(ks))
+    # entropies = np.repeat(1.0, len(ks))
+    # samples = 5
+    # filename = "vark_middle_01.bin"
+    # test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
 
-    # Varying k, mid = 10.0
-    ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
-    # ks = np.hstack([range(1,11)]).astype(int)
-    # ks = [6]
-    ds = np.repeat(100, len(ks))
-    ns = np.repeat(1000, len(ks))
-    middle_params = np.repeat(10.0, len(ks))
-    entropies = np.repeat(1.0, len(ks))
-    samples = 5
-    filename = "vark_middle_10.bin"
-    test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
-
-    # # Pictures
+    # # Varying k, mid = 1.0
     # # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
     # # ks = np.hstack([range(1,11)]).astype(int)
     # ks = [10]
-    # ds = np.repeat(2, len(ks))
-    # ns = np.repeat(100, len(ks))
-    # middle_params = np.repeat(0.05, len(ks))
-    # entropies = np.repeat(0.3, len(ks))
+    # ds = np.repeat(30, len(ks))
+    # ns = np.repeat(1000, len(ks))
+    # middle_params = np.repeat(1.0, len(ks))
+    # entropies = np.repeat(1.0, len(ks))
     # samples = 1
-    # filename = "dummy.bin"
-    # test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
+    # filename = "vark_middle_1_2.bin"
+    # test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
+
+#     # Varying k, mid = 10.0
+#     ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
+#     # ks = np.hstack([range(1,11)]).astype(int)
+#     # ks = [6]
+#     ds = np.repeat(100, len(ks))
+#     ns = np.repeat(1000, len(ks))
+#     middle_params = np.repeat(10.0, len(ks))
+#     entropies = np.repeat(1.0, len(ks))
+#     samples = 5
+#     filename = "vark_middle_10.bin"
+#     test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
+
+    # Pictures
+    # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
+    # ks = np.hstack([range(1,11)]).astype(int)
+    ks = [20]
+    ds = np.repeat(2, len(ks))
+    ns = np.repeat(100, len(ks))
+    middle_params = np.repeat(1.0, len(ks))
+    entropies = np.repeat(0.1, len(ks))
+    samples = 1
+    filename = "dummy.bin"
+    test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
 
     # # Varying n, mid = 1.0
     # ns = (np.array([10.0])**np.linspace(1.7, 3, 20)).astype(int)
@@ -1447,12 +1610,16 @@ def test_annulus(ks, ds, ns,
             samples_target[:, 0:2] = samples_target_2d.T
             samples_target = np.apply_along_axis(lambda x: transport_map(x, 2), 1, samples_target)
 
+            xs = samples_source
+            xt = samples_target
+
             # emb_dat = decomposition.PCA(n_components=2).fit_transform(np.vstack((samples_target,samples_source)))
 
             # pl.plot(emb_dat[0:samples_target.shape[0], 0], emb_dat[0:samples_target.shape[0], 1], '+b', label='Target samples')
             # pl.plot(emb_dat[samples_target.shape[0]:, 0], emb_dat[samples_target.shape[0]:, 1], 'xr', label='Source samples')
             # pl.show()
             
+            # Run Sinkhorn
             b1 = np.ones(samples_target.shape[0])/samples_target.shape[0]
             b2 = np.ones(samples_source.shape[0])/samples_source.shape[0]
             cost = ot.sinkhorn2(b1, b2, ot.dist(samples_source, samples_target), 1)
@@ -1468,7 +1635,31 @@ def test_annulus(ks, ds, ns,
             # cluster_cost = estimate_w2_cluster(samples_source, samples_target, gammas)
             # print("Cluster cost: {}".format(cluster_cost))
 
-            (zs1, zs2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, k, k, [1.0, middle_param, 1.0], np.array([entropy, entropy/10, entropy]), verbose = True, warm_start = False, relax_outside = [np.inf, np.inf], inner_tol = 1e-6, tol = 1e-5)
+            # Fixed weights
+            (zs1, zs2, gammas) = reweighted_clusters(b1, b2, samples_source, samples_target, k, [1.0, middle_param, 1.0], entropy, equal_weights = True, tol = 1e-4)
+            cluster_cost_equal = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = True)
+            cluster_cost_equal_nocor = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = False)
+            print("Fixed weights cost: {}".format(cluster_cost_equal))
+            print("Fixed weights cost, no correction: {}".format(cluster_cost_equal_nocor))
+            # results_cluster_ot_map[sample, k_ind] = cluster_cost_map
+            # results_cluster_ot_map_nocor[sample, k_ind] = cluster_cost_map_nocor
+
+            if visual:
+                # fixed weights plot
+                pl.figure(figsize = figsize)
+                pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+                pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+                pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
+                pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
+                ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
+                ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
+                ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
+                # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
+                pl.savefig(os.path.join("Figures","Annulus_fixed.png"), dpi = 300)
+                pl.close()
+
+            # Run hubot
+            (zs1, zs2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, k, k, [1.0, middle_param, 1.0], np.array([entropy, entropy/3, entropy]), verbose = True, warm_start = True, relax_outside = [np.inf, np.inf], inner_tol = 1e-6, tol = 1e-5, zs1_start = zs1, zs2_start = zs2, gammas_start = gammas)
             cluster_cost = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = True)
             cluster_cost_no_correction = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = False)
             cluster_cost_old = estimate_w2_cluster(samples_source, samples_target, gammas)
@@ -1478,27 +1669,27 @@ def test_annulus(ks, ds, ns,
             print("Double cluster cost, old way: {}".format(cluster_cost_old))
             print("Double cluster cost, no correction: {}".format(cluster_cost_no_correction))
 
-            xs = samples_source
-            xt = samples_target
 
             # print(zs1)
             # print(zs2)
 
-#             if visual:
-#                 # hubOT plot
-#                 pl.figure(figsize = figsize)
-#                 pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
-#                 pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
-#                 pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
-#                 pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
-#                 ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
-#                 ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
-#                 ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
-#                 # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
-#                 pl.savefig(os.path.join("Figures","Annulus_hubot.png"), dpi = 300)
+            if visual:
+                # hubOT plot
+                pl.figure(figsize = figsize)
+                pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+                pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+                pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
+                pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
+                ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
+                ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
+                ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
+                # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
+                pl.savefig(os.path.join("Figures","Annulus_hubot.png"), dpi = 300)
+                pl.close()
 
 
-            (zs1, zs2, gammas) = cluster_ot_map(b1, b2, samples_source, samples_target, k, [1.0, middle_param, 1.0], entropy, verbose = True)
+            # Run hubot with map middle transport
+            (zs1, zs2, gammas) = cluster_ot_map(b1, b2, samples_source, samples_target, k, [1.0, middle_param, 1.0], entropy, verbose = True, tol = 1e-4, warm_start = True)
             cluster_cost_map = estimate_w2_middle(samples_source, samples_target, zs1, zs2, [gammas[0], np.eye(k)/k, gammas[1]], bias_correction = True)
             cluster_cost_map_nocor = estimate_w2_middle(samples_source, samples_target, zs1, zs2, [gammas[0], np.eye(k)/k, gammas[1]], bias_correction = False)
             print("Map cluster cost: {}".format(cluster_cost_map))
@@ -1518,6 +1709,7 @@ def test_annulus(ks, ds, ns,
                 ot.plot.plot2D_samples_mat(zs2, xt, gammas[1], c=[1, .5, .5])
                 # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
                 pl.savefig(os.path.join("Figures","Annulus_map.png"), dpi = 300)
+                pl.close()
 
             (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, k, [1.0, 1.0], entropy, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf])
             # # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True)
@@ -1540,6 +1732,7 @@ def test_annulus(ks, ds, ns,
                 ot.plot.plot2D_samples_mat(zs, xt, gammas[1], c=[.5, .5, .5])
                 # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
                 pl.savefig(os.path.join("Figures", "Annulus_kbary.png"), dpi = 300)
+                pl.close()
 
     if not visual:
         mkdir(prefix)
@@ -3191,7 +3384,9 @@ if __name__ == "__main__":
     # test_split_data_uniform_varn()
     # test_split_data_uniform_visual()
 
-    test_annulus_all()
+    # test_annulus_all()
+
+    test_split_data_uniform_all()
 
     # test_constraint_ot()
     # t0 = time.time()
