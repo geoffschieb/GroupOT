@@ -561,6 +561,7 @@ def reweighted_clusters(b1, b2, xs, xt, k, lambdas, entr_reg,
         tol = 1e-10,
         lb = 0,
         equal_weights = False,
+        max_iter = 1000
         ):
 
     converged = False
@@ -576,7 +577,7 @@ def reweighted_clusters(b1, b2, xs, xt, k, lambdas, entr_reg,
     # unif_right = np.ones(xt.shape[0])/xt.shape[0]
     cost_old = np.float("Inf")
 
-    while not converged:
+    while not converged and its < max_iter:
         its += 1
         if its > 1:
             (zs1, zs2) = update_points(xs, xt, zs1, zs2, gammas, lambdas, verbose = False, no_iteration = False)
