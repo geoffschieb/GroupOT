@@ -212,6 +212,10 @@ def plot_transport_map(xs, xt, **kwds):
     for i in range(xs.shape[0]):
         pl.plot([xs[i, 0], xt[i, 0]], [xs[i, 1], xt[i, 1]], 'k', alpha = 0.5, **kwds)
 
+def plot_transport_map_arrows(xs, xt, **kwds):
+    for i in range(xs.shape[0]):
+        pl.arrow(xs[i, 0], xs[i, 1], xt[i, 0] - xs[i, 0], xt[i, 1] - xs[i, 1], color = 'k', alpha = 0.5, **kwds)
+
 # @profile
 def cluster_ot(b1, b2, xs, xt, k1, k2,
         lambdas, entr_reg,
@@ -535,6 +539,8 @@ def cluster_ot_map(b1, b2, xs, xt, k,
 
         Ms = [ot.dist(xs, zs1) + dist_weight*np.sum((zs2 - zs1)**2, axis = 1).reshape(1,-1), ot.dist(zs2, xt)]
         gammas = barycenter_bregman_chain(b1, b2, Ms, lambdas_barycenter, entr_reg, verbose = False, warm_start = warm_start)
+        if gammas is None:
+            return None
         cost = np.sum([lambdas_barycenter[i] * (np.sum(gammas[i] * Ms[i]) + entr_reg * stats.entropy(gammas[i].reshape(-1))) for i in range(2)])
 
         err = np.abs(cost - cost_old)/max(np.abs(cost), 1e-12)
@@ -577,36 +583,42 @@ def reweighted_clusters(b1, b2, xs, xt, k, lambdas, entr_reg,
     # unif_right = np.ones(xt.shape[0])/xt.shape[0]
     cost_old = np.float("Inf")
 
-    while not converged and its < max_iter:
-        its += 1
-        if its > 1:
-            (zs1, zs2) = update_points(xs, xt, zs1, zs2, gammas, lambdas, verbose = False, no_iteration = False)
-        Ms = [ot.dist(xs, zs1), ot.dist(zs1, zs2), ot.dist(zs2, xt)]
-        # gamma_left = nearest_points(Ms[0])
-        # gamma_right = nearest_points(Ms[2].T).T
-        if equal_weights:
-            gamma_left = ot.sinkhorn(b1, unif_middle, Ms[0], entr_reg)
-            gamma_right = ot.sinkhorn(unif_middle, b2, Ms[2], entr_reg)
-        elif lb == 0:
-            gamma_left = nearest_points_reg(b1, Ms[0], entr_reg)
-            gamma_right = nearest_points_reg(b2, Ms[2].T, entr_reg).T
-        else:
-            gamma_left = constraint_ot(b1, lb, Ms[0], entr_reg)
-            gamma_right = constraint_ot(b2, lb, Ms[2].T, entr_reg).T
-        # gamma_middle = ot.sinkhorn(unif, unif, Ms[1], entr_reg)
-        gamma_middle = ot.emd(unif_middle, unif_middle, Ms[1])
-        gammas = [gamma_left, gamma_middle, gamma_right]
+    try:
+        warnings.filterwarnings("error")
+        while not converged and its < max_iter:
+            its += 1
+            if its > 1:
+                (zs1, zs2) = update_points(xs, xt, zs1, zs2, gammas, lambdas, verbose = False, no_iteration = False)
+            Ms = [ot.dist(xs, zs1), ot.dist(zs1, zs2), ot.dist(zs2, xt)]
+            # gamma_left = nearest_points(Ms[0])
+            # gamma_right = nearest_points(Ms[2].T).T
+            if equal_weights:
+                gamma_left = ot.sinkhorn(b1, unif_middle, Ms[0], entr_reg)
+                gamma_right = ot.sinkhorn(unif_middle, b2, Ms[2], entr_reg)
+            elif lb == 0:
+                gamma_left = nearest_points_reg(b1, Ms[0], entr_reg)
+                gamma_right = nearest_points_reg(b2, Ms[2].T, entr_reg).T
+            else:
+                gamma_left = constraint_ot(b1, lb, Ms[0], entr_reg)
+                gamma_right = constraint_ot(b2, lb, Ms[2].T, entr_reg).T
+            # gamma_middle = ot.sinkhorn(unif, unif, Ms[1], entr_reg)
+            gamma_middle = ot.emd(unif_middle, unif_middle, Ms[1])
+            gammas = [gamma_left, gamma_middle, gamma_right]
 
-        # cost = np.sum([lambdas[i] * np.sum(gammas[i] * Ms[i]) for i in range(3)]) + lambdas[1] * entr_reg * stats.entropy(gammas[1].reshape(-1,1))
-        cost = np.sum([lambdas[i] * (np.sum(gammas[i] * Ms[i]) + entr_reg * entr_vec(gammas[i])) for i in range(3)])
-        err = abs(cost - cost_old)/max(abs(cost), 1e-12)
+            # cost = np.sum([lambdas[i] * np.sum(gammas[i] * Ms[i]) for i in range(3)]) + lambdas[1] * entr_reg * stats.entropy(gammas[1].reshape(-1,1))
+            cost = np.sum([lambdas[i] * (np.sum(gammas[i] * Ms[i]) + entr_reg * entr_vec(gammas[i])) for i in range(3)])
+            err = abs(cost - cost_old)/max(abs(cost), 1e-12)
 
-        if err < tol:
-            converged = True
+            if err < tol:
+                converged = True
 
-        cost_old = cost
+            cost_old = cost
 
-    return (zs1, zs2, gammas)
+        return (zs1, zs2, gammas)
+    except RuntimeWarning:
+        return None
+    finally:
+        warnings.filterwarnings("default")
 
 def kmeans_transport(xs, xt, k):
     clust_sources = KMeans(n_clusters = k).fit(xs)
@@ -1976,7 +1988,7 @@ def test_domain_adaptation(sim_params, get_data):
         k = params[0]
         print("Running kmeans + OT for {}".format(params))
         (xs, xt, labs, labt) = data
-        gammas = kmeans_transport(xs, xt, k)
+        (zs1, zs2, gammas) = kmeans_transport(xs, xt, k)
         if any([np.any(np.isnan(gamma)) for gamma in gammas]):
             return(np.inf)
         else:
@@ -1989,27 +2001,57 @@ def test_domain_adaptation(sim_params, get_data):
     
     # hubOT
     def hot_err(data, params, classifiers):
-        (entr_reg, k) = params
+        (entr_reg, k, middle_param) = params
         print("Running hubOT for {}".format(params))
         # Compute hub OT
         (xs, xt, labs, labt) = data
         a = np.ones(xs.shape[0])/xs.shape[0]
         b = np.ones(xt.shape[0])/xt.shape[0]
-        hot_ret = cluster_ot(a, b, xs, xt, k, k, [1.0, 1.0, 1.0], entr_reg,
+        hot_ret = cluster_ot(a, b, xs, xt, k, k, [1.0, middle_param, 1.0], entr_reg,
                 relax_outside = [np.inf, np.inf],
                 warm_start = True,
-                inner_tol = 1e-5,
-                tol = 1e-4,
-                reduced_inner_tol = True,
+                inner_tol = 1e-6,
+                tol = 1e-5,
+                reduced_inner_tol = False,
                 inner_tol_start = 1e-1,
-                max_iter = 300,
+                max_iter = 500,
                 verbose = False,
                 entr_reg_start = 1000.0
                 )
         if hot_ret is None:
             return np.inf
         else:
-            (zs1, zs2, a1, a2, gammas_k) = hot_ret
+            (zs1, zs2, gammas_k) = hot_ret
+            # labt_pred_hot = classify_cluster_ot(gammas_k, labs_ind)
+            gamma_total = total_gamma(gammas_k)
+            expected_err = np.sum(gamma_total * (labs.reshape(-1, 1) != labt.reshape(1, -1)))
+            # labt_pred_hot = classify_1nn(xs, bary_map(total_gamma(gammas_k), xs), labs)
+            # labt_pred_hot2 = classify_1nn(xs, map_from_clusters(xs, xt, gammas_k), labs)
+            labt_preds_bary = [c.predict(bary_map(total_gamma(gammas_k), xs)) for c in classifiers]
+            labt_preds_map = [c.predict(map_from_clusters(xs, xt, gammas_k)) for c in classifiers]
+            # print(class_err_combined(labt, labt_pred_hot))
+            # print(class_err_combined(labt, labt_pred_hot2))
+            # print()
+            return [expected_err] + [class_err_combined(labt, labt_pred) for labt_pred in labt_preds_bary] + [class_err_combined(labt, labt_pred) for labt_pred in labt_preds_map]
+    
+    # hubOT, fixed weights
+    def hot_fixed_err(data, params, classifiers):
+        (entr_reg, k, middle_param) = params
+        print("Running hubOT (fixed weights) for {}".format(params))
+        # Compute hub OT
+        (xs, xt, labs, labt) = data
+        a = np.ones(xs.shape[0])/xs.shape[0]
+        b = np.ones(xt.shape[0])/xt.shape[0]
+        hot_ret = reweighted_clusters(a, b, xs, xt,
+                k, [1.0, middle_param, 1.0], entr_reg,
+                tol = 1e-6,
+                max_iter = 500,
+                equal_weights = True
+                )
+        if hot_ret is None:
+            return np.inf
+        else:
+            (zs1, zs2, gammas_k) = hot_ret
             # labt_pred_hot = classify_cluster_ot(gammas_k, labs_ind)
             gamma_total = total_gamma(gammas_k)
             expected_err = np.sum(gamma_total * (labs.reshape(-1, 1) != labt.reshape(1, -1)))
@@ -2033,11 +2075,142 @@ def test_domain_adaptation(sim_params, get_data):
         kbary_ret = kbarycenter(a, b, xs, xt, k, [1.0, 1.0],
                 entr_reg,
                 warm_start = True,
-                tol = 1e-4,
-                inner_tol = 1e-5,
-                reduced_inner_tol = True,
+                tol = 1e-5,
+                inner_tol = 1e-6,
+                reduced_inner_tol = False,
                 inner_tol_start = 1e-1,
-                max_iter = 300,
+                max_iter = 500,
+                verbose = False,
+                entr_reg_start = 1000.0
+                )
+        if kbary_ret is None:
+            return np.inf
+        else:
+            (zs, gammas) = kbary_ret
+            # labt_pred_kb = classify_kbary(gammas, labs_ind)
+            labt_preds_bary = [c.predict(bary_map(total_gamma(gammas), xs)) for c in classifiers]
+            labt_preds_map = [c.predict(map_from_clusters(xs, xt, gammas)) for c in classifiers]
+            gamma_total = total_gamma(gammas)
+            expected_err = np.sum(gamma_total * (labs.reshape(-1, 1) != labt.reshape(1, -1)))
+            # print(class_err_combined(labt, labt_pred_kb))
+            # print(class_err_combined(labt, labt_pred_kb2))
+            # print()
+            return [expected_err] + [class_err_combined(labt, labt_pred) for labt_pred in labt_preds_bary] + [class_err_combined(labt, labt_pred) for labt_pred in labt_preds_map]
+    
+    # Group lasso
+    def gl_ot_err(data, params, classifiers):
+        (xs, xt, labs, labt) = data
+        # (entr_reg, eta, samples, train) = params
+        (entr_reg, eta) = params
+        print("Running group lasso for {}".format(params))
+        try:
+            warnings.filterwarnings("error")
+            gamma_gl = ot.da.SinkhornL1l2Transport(reg_e=entr_reg, reg_cl=eta).fit(Xs = xs, ys = labs, Xt = xt).coupling_
+            # labt_pred_gl = classify_ot(gamma_gl, labs_ind, labs)
+            labt_preds = [c.predict(bary_map(gamma_gl, xs)) for c in classifiers]
+            return [class_err_combined(labt, labt_pred) for labt_pred  in labt_preds]
+        except RuntimeWarning:
+            return np.inf
+        finally:
+            warnings.filterwarnings("default")
+
+    # hubOT, map
+    def hot_map_err(data, params, classifiers):
+        (entr_reg, k, middle_param) = params
+        print("Running hubOT (restricted to map) for {}".format(params))
+        # Compute hub OT
+        (xs, xt, labs, labt) = data
+        a = np.ones(xs.shape[0])/xs.shape[0]
+        b = np.ones(xt.shape[0])/xt.shape[0]
+        hot_ret = cluster_ot_map(a, b, xs, xt,
+                k, [1.0, middle_param, 1.0], entr_reg,
+                tol = 1e-6,
+                max_iter = 500,
+                verbose = False,
+                warm_start = True
+                )
+        if hot_ret is None:
+            return np.inf
+        else:
+            (zs1, zs2, gammas_k) = hot_ret
+            # labt_pred_hot = classify_cluster_ot(gammas_k, labs_ind)
+            gamma_total = total_gamma(gammas_k)
+            expected_err = np.sum(gamma_total * (labs.reshape(-1, 1) != labt.reshape(1, -1)))
+            # labt_pred_hot = classify_1nn(xs, bary_map(total_gamma(gammas_k), xs), labs)
+            # labt_pred_hot2 = classify_1nn(xs, map_from_clusters(xs, xt, gammas_k), labs)
+            labt_preds_bary = [c.predict(bary_map(total_gamma(gammas_k), xs)) for c in classifiers]
+            labt_preds_map = [c.predict(map_from_clusters(xs, xt, gammas_k)) for c in classifiers]
+            # print(class_err_combined(labt, labt_pred_hot))
+            # print(class_err_combined(labt, labt_pred_hot2))
+            # print()
+            return [expected_err] + [class_err_combined(labt, labt_pred) for labt_pred in labt_preds_bary] + [class_err_combined(labt, labt_pred) for labt_pred in labt_preds_map]
+    
+    # k barycenter
+    def kbary_err(data, params, classifiers):
+        (entr_reg, k) = params
+        print("Running k barycenter for {}".format(params))
+        # k barycenter OT
+        (xs, xt, labs, labt) = data
+        a = np.ones(xs.shape[0])/xs.shape[0]
+        b = np.ones(xt.shape[0])/xt.shape[0]
+        kbary_ret = kbarycenter(a, b, xs, xt, k, [1.0, 1.0],
+                entr_reg,
+                warm_start = True,
+                tol = 1e-6,
+                inner_tol = 1e-7,
+                reduced_inner_tol = False,
+                inner_tol_start = 1e-1,
+                max_iter = 500,
+                verbose = False,
+                entr_reg_start = 1000.0
+                )
+        if kbary_ret is None:
+            return np.inf
+        else:
+            (zs, gammas) = kbary_ret
+            # labt_pred_kb = classify_kbary(gammas, labs_ind)
+            labt_preds_bary = [c.predict(bary_map(total_gamma(gammas), xs)) for c in classifiers]
+            labt_preds_map = [c.predict(map_from_clusters(xs, xt, gammas)) for c in classifiers]
+            gamma_total = total_gamma(gammas)
+            expected_err = np.sum(gamma_total * (labs.reshape(-1, 1) != labt.reshape(1, -1)))
+            # print(class_err_combined(labt, labt_pred_kb))
+            # print(class_err_combined(labt, labt_pred_kb2))
+            # print()
+            return [expected_err] + [class_err_combined(labt, labt_pred) for labt_pred in labt_preds_bary] + [class_err_combined(labt, labt_pred) for labt_pred in labt_preds_map]
+    
+    # Group lasso
+    def gl_ot_err(data, params, classifiers):
+        (xs, xt, labs, labt) = data
+        # (entr_reg, eta, samples, train) = params
+        (entr_reg, eta) = params
+        print("Running group lasso for {}".format(params))
+        try:
+            warnings.filterwarnings("error")
+            gamma_gl = ot.da.SinkhornL1l2Transport(reg_e=entr_reg, reg_cl=eta).fit(Xs = xs, ys = labs, Xt = xt).coupling_
+            # labt_pred_gl = classify_ot(gamma_gl, labs_ind, labs)
+            labt_preds = [c.predict(bary_map(gamma_gl, xs)) for c in classifiers]
+            return [class_err_combined(labt, labt_pred) for labt_pred  in labt_preds]
+        except RuntimeWarning:
+            return np.inf
+        finally:
+            warnings.filterwarnings("default")
+
+    # k barycenter
+    def kbary_err(data, params, classifiers):
+        (entr_reg, k) = params
+        print("Running k barycenter for {}".format(params))
+        # k barycenter OT
+        (xs, xt, labs, labt) = data
+        a = np.ones(xs.shape[0])/xs.shape[0]
+        b = np.ones(xt.shape[0])/xt.shape[0]
+        kbary_ret = kbarycenter(a, b, xs, xt, k, [1.0, 1.0],
+                entr_reg,
+                warm_start = True,
+                tol = 1e-6,
+                inner_tol = 1e-7,
+                reduced_inner_tol = False,
+                inner_tol_start = 1e-1,
+                max_iter = 500,
                 verbose = False,
                 entr_reg_start = 1000.0
                 )
@@ -2173,6 +2346,8 @@ def test_domain_adaptation(sim_params, get_data):
             "ot_entr": ot_entr_err,
             "ot_kmeans": kmeans_ot_err,
             "ot_2kbary": hot_err,
+            "ot_2kbary_fixed": hot_fixed_err,
+            "ot_2kbary_map": hot_map_err,
             "ot_kbary": kbary_err,
             "ot_gl": gl_ot_err,
             "ot_map": ot_map_err,
@@ -2189,6 +2364,8 @@ def test_domain_adaptation(sim_params, get_data):
             "ot_kmeans": 1 + 2*len(nn_ks),
             "ot_2kbary": 1 + 2*len(nn_ks),
             "ot_kbary": 1 + 2*len(nn_ks),
+            "ot_2kbary_fixed": 1 + 2*len(nn_ks),
+            "ot_2kbary_map": 1 + 2*len(nn_ks),
             "ot_gl": len(nn_ks),
             "ot_map": len(nn_ks),
             "noadj": len(nn_ks),
@@ -2354,13 +2531,14 @@ def test_bio_data():
 
     perclass = {"source": 100, "target": 100}
     samples = {"train": 20, "test": 20}
+    # samples = {"train": 1, "test": 1}
     label_samples = [20, 20, 20]
     # label_samples = [10, 10, 10, 10]
     # outfile = "pancreas.bin"
-    outfile = "haem_small.bin"
+    outfile = "haem_small_new.bin"
 
     # entr_regs = np.array([10.0])**np.linspace(-3, 0, 7)
-    entr_regs = np.array([10.0])**np.linspace(-3, -1, 5)
+    entr_regs = np.array([10.0])**np.linspace(-3, -1, 7)
     # entr_regs = np.array([10.0])**range(-2, 0)
     # entr_regs = np.array([10.0])**range(-1, 0)
     # gl_params = np.array([10.0])**range(-3, 3)
@@ -2376,6 +2554,8 @@ def test_bio_data():
     # ks = np.array([3, 5, 10, 20, 30, 50])
     ks = np.array([3, 6, 9, 12, 20, 30])
     ds = np.array([10, 20, 30, 40, 50, 60, 60])
+    middle_params = [0.5, 1.0, 2.0]
+    # middle_params = [1.0]
 
     # entr_regs = np.array([10.0])
     # gl_params = np.array([10.0])**range(4, 5)
@@ -2402,9 +2582,17 @@ def test_bio_data():
                 "function": "ot_kmeans",
                 "parameter_ranges": [ks]
                 },
-            # "ot_2kbary": {
-            #     "function": "ot_2kbary",
-            #     "parameter_ranges": [entr_regs, ks]
+            "ot_2kbary": {
+                "function": "ot_2kbary",
+                "parameter_ranges": [entr_regs, ks, middle_params]
+                },
+            "ot_2kbary_fixed": {
+                "function": "ot_2kbary_fixed",
+                "parameter_ranges": [entr_regs, ks, middle_params]
+                },
+            # "ot_2kbary_map": {
+            #     "function": "ot_2kbary_map",
+            #     "parameter_ranges": [entr_regs, ks, middle_params]
             #     },
             "ot_kbary": {
                 "function": "ot_kbary",
@@ -2422,6 +2610,7 @@ def test_bio_data():
                 "function": "tca",
                 "parameter_ranges": [ds]
                 },
+            # Exclude
             # "coral": {
             #     "function": "coral",
             #     "parameter_ranges": []
@@ -3147,9 +3336,6 @@ if __name__ == "__main__":
     # test_gaussian_mixture_vard()
     # test_gaussian_mixture_vark()
 
-    test_annulus_all()
-
-    # test_split_data_uniform_all()
 
     # test_constraint_ot()
     # t0 = time.time()
@@ -3159,8 +3345,11 @@ if __name__ == "__main__":
     # test_moons_kplot()
     # test_satija()
     # test_caltech_office()
-    # test_bio_data()
     # test_bio_diag()
     # test_bio_diag2()
     # test_bio_diag3()
     # test_pancreas_data()
+
+    # test_annulus_all()
+    # test_split_data_uniform_all()
+    test_bio_data()
