@@ -750,7 +750,6 @@ def estimate_w2_middle(xs, xt, zs1, zs2, gammas, bias_correction = False, b0 = N
 
     return total_cost
 
-
 def estimate_distances(b1, b2, xs, xt, ks, entr_reg, lambdas = [1.0, 1.0, 1.0]):
     results = np.zeros(len(ks))
     for (i, k) in enumerate(ks):
@@ -1190,41 +1189,23 @@ def test_gaussian_mixture_vark():
 def test_split_data_uniform_all():
     prefix = "split_cube_results"
 
-    # Varying k, mid = 0.1
-    # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
-    # ks = np.hstack([range(1,11)]).astype(int)
-    ks = [4]
-    ds = np.repeat(100, len(ks))
-    ns = np.repeat(1000, len(ks))
-    middle_params = np.repeat(2, len(ks))
-    entropies = np.repeat(1.0, len(ks))
-    samples = 1
-    filename = "vark_middle_01.bin"
-    test_split_data_uniform(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
-
-    # # Varying k, mid = 1.0
-    # # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
-    # # ks = np.hstack([range(1,11)]).astype(int)
+    d = 30
+    n = 1000
+    ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
     # ks = [10]
-    # ds = np.repeat(30, len(ks))
-    # ns = np.repeat(1000, len(ks))
-    # middle_params = np.repeat(1.0, len(ks))
-    # entropies = np.repeat(1.0, len(ks))
-    # samples = 1
-    # filename = "vark_middle_1_2.bin"
-    # test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
+    entropies_l = [0.1, 1.0]
+    middle_params_l = [0.5, 1.0, 2.0]
+    samples = 20
 
-#     # Varying k, mid = 10.0
-#     ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
-#     # ks = np.hstack([range(1,11)]).astype(int)
-#     # ks = [6]
-#     ds = np.repeat(100, len(ks))
-#     ns = np.repeat(1000, len(ks))
-#     middle_params = np.repeat(10.0, len(ks))
-#     entropies = np.repeat(1.0, len(ks))
-#     samples = 5
-#     filename = "vark_middle_10.bin"
-#     test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
+    # Varying k
+    for entropy in entropies_l:
+        for middle_param in middle_params_l:
+            ds = np.repeat(d, len(ks))
+            ns = np.repeat(n, len(ks))
+            middle_params = np.repeat(middle_param, len(ks))
+            entropies = np.repeat(entropy, len(ks))
+            filename = "vark_d_{}_n_{}_middle_{:.2e}_entropy_{:.2e}.bin".format(d, n, middle_param, entropy)
+            test_split_data_uniform(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
 
     # # Pictures
     # # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
@@ -1238,278 +1219,20 @@ def test_split_data_uniform_all():
     # filename = "dummy.bin"
     # test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
 
-    # # Varying n, mid = 1.0
-    # ns = (np.array([10.0])**np.linspace(1.7, 3, 20)).astype(int)
-    # ks = np.repeat(10, len(ns))
-    # # ks = np.hstack([range(1,11)]).astype(int)
-    # # ks = [6]
-    # ds = np.repeat(30, len(ks))
-    # middle_params = np.repeat(1.0, len(ks))
-    # entropies = np.repeat(1.0, len(ks))
-    # samples = 20
-    # filename = "varn_middle_1.bin"
-    # test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
-
-def test_split_data_uniform(ks, ds, ns, middle_params, entropies, samples, prefix, filename):
-
-    def transport_map(x, length = 1):
-        direction = np.zeros_like(x)
-        direction[0:2] = np.sign(x[0:2])
-        return x + length * direction
-
-    results_vanilla = np.empty((samples, len(ks)))
-    results_kbary = np.empty((samples, len(ks)))
-    results_cluster = np.empty((samples, len(ks)))
-    results_cluster_nocor = np.empty((samples, len(ks)))
-
-    for (ind, k) in enumerate(ks):
-        d = ds[ind]
-        n = ns[ind]
-        entropy = entropies[ind]
-        middle_param = middle_params[ind]
-        print()
-        print("k = {}, d = {}, n = {}, entropy = {}, middle_param = {}".format(k, d, n, entropy, middle_param))
-        print()
-        for sample in range(samples):
-            samples_source = np.random.uniform(low=-1, high=1, size=(n, d))
-            samples_target = np.random.uniform(low=-1, high=1, size=(n, d))
-            samples_target = np.apply_along_axis(lambda x: transport_map(x, 2), 1, samples_target)
-            
-            b1 = np.ones(samples_target.shape[0])/samples_target.shape[0]
-            b2 = np.ones(samples_source.shape[0])/samples_source.shape[0]
-            cost = ot.sinkhorn2(b1, b2, ot.dist(samples_source, samples_target), 1)
-            results_vanilla[sample, ind] = cost
-            print("Sinkhorn: {}".format(cost))
-
-            xs = samples_source
-            xt = samples_target
-
-            (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, k, [1.0, 1.0], entropy, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf])
-            # # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True)
-            bary_cost = estimate_w2_cluster(samples_source, samples_target, gammas)
-            results_kbary[sample, ind] = bary_cost
-            print("Barycenter cost: {}".format(bary_cost))
-
-            (zs1, zs2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, k, k, [1.0, middle_param, 1.0], entropy, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf], inner_tol = 1e-12, tol = 1e-5)
-            cluster_cost = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = True)
-            cluster_cost_no_correction = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = False)
-            print("Double cluster cost: {}".format(cluster_cost))
-            print("Double cluster cost, no correction: {}".format(cluster_cost_no_correction))
-
-    print(results_vanilla)
-    print(results_kbary)
-
-    with open(os.path.join(prefix, filename), "wb") as f:
-        pickle.dump({
-            "ds": ds,
-            "ns": ns,
-            "ks": ks,
-            "entropies": entropies,
-            "middle_params": middle_params,
-            "results_vanilla": results_vanilla,
-            "results_kbary": results_kbary
-            }, f)
-
-def test_split_data_uniform_vark():
-    global ds, results_vanilla, results_kbary
-
-    def transport_map(x, length = 1):
-        direction = np.zeros_like(x)
-        direction[0:2] = np.sign(x[0:2])
-        return x + length * direction
-
-    # ks = np.hstack([range(1,11), range(12,31,2), range(34, 71, 4), range(70, 10, 101)]).astype(int)
-    # ks = np.hstack([range(1,11), range(12,31,2), range(34, 71, 4), range(70, 10, 101)]).astype(int)
-    # ks = np.hstack([range(10,21,2)])
-    ks = [50]
-    # ds = (np.array([2])**np.linspace(2, 8, 15)).astype(int)
-    d = 30
-    n = 10*d
-    samples = 1
-    middle_param = 0.1
-    entropy = 0.5
-    results_vanilla = np.empty((samples, len(ks)))
-    results_kbary = np.empty((samples, len(ks)))
-    results_cluster = np.empty((samples, len(ks)))
-    results_cluster_nocor = np.empty((samples, len(ks)))
-
-    for (k_ind, k) in enumerate(ks):
-        print()
-        print("k = {}".format(k))
-        print()
-        for sample in range(samples):
-            samples_source = np.random.uniform(low=-1, high=1, size=(n, d))
-            samples_target = np.random.uniform(low=-1, high=1, size=(n, d))
-            samples_target = np.apply_along_axis(lambda x: transport_map(x, 2), 1, samples_target)
-            
-            b1 = np.ones(samples_target.shape[0])/samples_target.shape[0]
-            b2 = np.ones(samples_source.shape[0])/samples_source.shape[0]
-            cost = ot.sinkhorn2(b1, b2, ot.dist(samples_source, samples_target), 1)
-            results_vanilla[sample, k_ind] = cost
-            print("Sinkhorn: {}".format(cost))
-
-            xs = samples_source
-            xt = samples_target
-
-            (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, k, [1.0, 1.0], entropy, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf])
-            # # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True)
-            bary_cost = estimate_w2_cluster(samples_source, samples_target, gammas)
-            results_kbary[sample, k_ind] = bary_cost
-            print("Barycenter cost: {}".format(bary_cost))
-
-            (zs1, zs2, gammas) = cluster_ot(b1, b2, samples_source, samples_target, k, k, [1.0, middle_param, 1.0], entropy, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf], inner_tol = 1e-12, tol = 1e-5)
-            cluster_cost = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = True)
-            cluster_cost_no_correction = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = False)
-            print("Double cluster cost: {}".format(cluster_cost))
-            print("Double cluster cost, no correction: {}".format(cluster_cost_no_correction))
-
-    print(results_vanilla)
-    print(results_kbary)
-
-    with open(os.path.join("uniform_results", "vark_trial.bin"), "wb") as f:
-        pickle.dump({
-            "d": d,
-            "n": n,
-            "ks": ks,
-            "results_vanilla": results_vanilla,
-            "results_kbary": results_kbary
-            }, f)
-
-def test_split_data_uniform_varn():
-    global ds, results_vanilla, results_kbary
-
-    def transport_map(x, length = 1):
-        direction = np.zeros_like(x)
-        direction[0:2] = np.sign(x[0:2])
-        return x + length * direction
-
-    # ks = np.hstack([range(1,11), range(12,31,2), range(34, 71, 4), range(70, 10, 101)]).astype(int)
-    # ds = (np.array([2])**np.linspace(2, 8, 15)).astype(int)
-    d = 30
-    ns = (np.array([10.0])**np.linspace(1.7, 3, 20)).astype(int)
-    samples = 20
-    k = 10
-    results_vanilla = np.empty((samples, len(ns)))
-    results_kbary = np.empty((samples, len(ns)))
-    results_kmeans = np.empty((samples, len(ns)))
-
-    for (n_ind, n) in enumerate(ns):
-        for sample in range(samples):
-            samples_source = np.random.uniform(low=-1, high=1, size=(n, d))
-            samples_target = np.random.uniform(low=-1, high=1, size=(n, d))
-            samples_target = np.apply_along_axis(lambda x: transport_map(x, 2), 1, samples_target)
-            
-            b1 = np.ones(samples_target.shape[0])/samples_target.shape[0]
-            b2 = np.ones(samples_source.shape[0])/samples_source.shape[0]
-            # cost = ot.emd2(b1, b2, ot.dist(samples_source, samples_target), 1)
-            # results_vanilla[sample, n_ind] = cost
-            # print("Sinkhorn: {}".format(cost))
-
-            xs = samples_source
-            xt = samples_target
-
-            # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, k, [1.0, 1.0], 0.1, verbose = True,
-            #         warm_start = True, relax_outside = [np.inf, np.inf],
-            #         tol = 1e-4,
-            #         inner_tol = 1e-5,
-            #         max_iter = 500)
-            # # # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True)
-            # bary_cost = estimate_w2_cluster(samples_source, samples_target, gammas)
-            # results_kbary[sample, n_ind] = bary_cost
-            # print("Barycenter cost: {}".format(bary_cost))
-
-            gammas_kmeans = kmeans_transport(xs, xt, k)
-            kmeans_cost = estimate_w2_cluster(xs, xt, gammas_kmeans)
-            results_kmeans[sample, n_ind] = kmeans_cost
-            print("Kmeans cost: {}".format(kmeans_cost))
-
-
-
-    print(results_vanilla)
-    print(results_kbary)
-    print(results_kmeans)
-
-    # with open(os.path.join("uniform_results", "varn6.bin"), "wb") as f:
-    #     pickle.dump({
-    #         "d": d,
-    #         "ns": ns,
-    #         "k": k,
-    #         "results_vanilla": results_vanilla,
-    #         "results_kbary": results_kbary
-    #         }, f)
-
-    with open(os.path.join("uniform_results", "varn_kmeans.bin"), "wb") as f:
-        pickle.dump({
-            "d": d,
-            "ns": ns,
-            "k": k,
-            "results_kmeans": results_kmeans,
-            }, f)
-
-def test_split_data_uniform_visual():
-    global ds, results_vanilla, results_kbary
-    def transport_map(x, length = 1):
-        direction = np.zeros_like(x)
-        direction[0:2] = np.sign(x[0:2])
-        return x + length * direction
-
-    # ks = np.hstack([range(1,11), range(12,31,2), range(34, 71, 4), range(70, 10, 101)]).astype(int)
-    # ds = (np.array([2])**np.linspace(2, 8, 15)).astype(int)
-    d = 30
-    # ns = (np.array([10.0])**np.linspace(1.7, 3, 20)).astype(int)
-    n = 100
-    k = 4
-    figsize = (6,4)
-
-    samples_source = np.random.uniform(low=-1, high=1, size=(n, d))
-    samples_target = np.random.uniform(low=-1, high=1, size=(n, d))
-    samples_target = np.apply_along_axis(lambda x: transport_map(x, 2), 1, samples_target)
-
-    emb_dat = decomposition.PCA(n_components=2).fit_transform(np.vstack((samples_source,samples_target)))
-    xs_emb = emb_dat[0:samples_source.shape[0],:]
-    xt_emb = emb_dat[samples_source.shape[0]:,:]
-    pl.figure(figsize=figsize)
-    pl.plot(*xs_emb.T, '+b', label='Source samples')
-    pl.plot(*xt_emb.T, 'xr', label='Target samples')
-
-    b1 = np.ones(samples_target.shape[0])/samples_target.shape[0]
-    b2 = np.ones(samples_source.shape[0])/samples_source.shape[0]
-    # cost = ot.sinkhorn2(b1, b2, ot.dist(samples_source, samples_target), 1)
-    M = ot.dist(samples_source, samples_target)
-    gamma_ot = ot.sinkhorn(b1, b2, M, 1)
-    # ot.plot.plot2D_samples_mat(xs_emb, xt_emb, gamma_ot, c=[.5, .5, 1])
-    cost = np.sum(gamma_ot * M)
-    print("Sinkhorn: {}".format(cost))
-    # pl.show()
-    # pl.savefig(os.path.join("Figures","Hypercube_OT.png"), dpi = 300)
-
-    xs = samples_source
-    xt = samples_target
-
-    (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, k, [1.0, 1.0], 1, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf])
-    # # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True)
-    bary_cost = estimate_w2_cluster(samples_source, samples_target, gammas)
-    print("Barycenter cost: {}".format(bary_cost))
-    newsource = map_from_clusters(xs_emb, xt_emb, gammas)
-    pl.figure(figsize=figsize)
-    pl.plot(*xs_emb.T, '+b', label='Source samples')
-    pl.plot(*xt_emb.T, 'xr', label='Target samples')
-    plot_transport_map(xt_emb, newsource)
-    pl.savefig(os.path.join("Figures","Hypercube_kOT.png"), dpi = 300)
-    pl.close()
-
 def test_annulus_all():
     prefix = "annulus_results"
 
     d = 30
     n = 1000
     ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
-    # ks = [10]
-    entropies_l = [0.1, 1.0]
+    # ks = [50]
+    # entropies_l = [0.1, 1.0]
+    entropies_l = [1.0, 10.0]
     middle_params_l = [0.5, 1.0, 2.0]
+    # middle_params_l = [2.0]
     samples = 20
 
-    # Varying
+    # Varying k
     for entropy in entropies_l:
         for middle_param in middle_params_l:
             ds = np.repeat(d, len(ks))
@@ -1517,59 +1240,8 @@ def test_annulus_all():
             middle_params = np.repeat(middle_param, len(ks))
             entropies = np.repeat(entropy, len(ks))
             filename = "vark_d_{}_n_{}_middle_{:.2e}_entropy_{:.2e}.bin".format(d, n, middle_param, entropy)
-            test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
-
-    # # Varying k, mid = 1.0
-    # # ks = np.hstack([range(1,11)]).astype(int)
-    # # ks = [10]
-    # ds = np.repeat(d, len(ks))
-    # ns = np.repeat(n, len(ks))
-    # middle_params = np.repeat(middle_param, len(ks))
-    # entropies = np.repeat(entropy, len(ks))
-    # filename = "vark_middle_1_2.bin"
-    # test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
-
-    # # Varying k, mid = 10.0
-    # # ks = np.hstack([range(1,11)]).astype(int)
-    # # ks = [6]
-    # ds = np.repeat(d, len(ks))
-    # ns = np.repeat(n, len(ks))
-    # middle_params = np.repeat(middle_param, len(ks))
-    # entropies = np.repeat(entropy, len(ks))
-    # filename = "vark_middle_10.bin"
-    # test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
-
-    # entropy = 0.1
-    # # Varying k, mid = 0.1, entropy = 0.1
-    # # ks = np.hstack([range(1,11)]).astype(int)
-    # # ks = [6]
-    # ds = np.repeat(d, len(ks))
-    # ns = np.repeat(n, len(ks))
-    # middle_params = np.repeat(middle_param, len(ks))
-    # entropies = np.repeat(entropy, len(ks))
-    # filename = "vark_middle_01_entropy_01.bin"
-    # test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
-
-    # # Varying k, mid = 1.0
-    # # ks = np.hstack([range(1,11)]).astype(int)
-    # # ks = [10]
-    # ds = np.repeat(d, len(ks))
-    # ns = np.repeat(n, len(ks))
-    # middle_params = np.repeat(middle_param, len(ks))
-    # entropies = np.repeat(entropy, len(ks))
-    # filename = "vark_middle_1_entropy_01.bin"
-    # test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
-
-    # # Varying k, mid = 10.0
-    # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
-    # # ks = np.hstack([range(1,11)]).astype(int)
-    # # ks = [6]
-    # ds = np.repeat(d, len(ks))
-    # ns = np.repeat(n, len(ks))
-    # middle_params = np.repeat(middle_param, len(ks))
-    # entropies = np.repeat(entropy, len(ks))
-    # filename = "vark_middle_10_entropy_01.bin"
-    # test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
+            test_runs(generate_annulus_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = False)
+            # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
 
 #     # Pictures
 #     # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
@@ -1583,29 +1255,54 @@ def test_annulus_all():
 #     filename = "dummy.bin"
 #     test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
 
-    # # Varying n, mid = 1.0
-    # ns = (np.array([10.0])**np.linspace(1.7, 3, 20)).astype(int)
-    # ks = np.repeat(10, len(ns))
-    # # ks = np.hstack([range(1,11)]).astype(int)
-    # # ks = [6]
-    # ds = np.repeat(30, len(ks))
-    # middle_params = np.repeat(1.0, len(ks))
-    # entropies = np.repeat(1.0, len(ks))
-    # samples = 20
-    # filename = "varn_middle_1.bin"
-    # test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename)
+def generate_split_uniform_data(d, n):
+    def transport_map(x, length = 1):
+        direction = np.zeros_like(x)
+        direction[0:2] = np.sign(x[0:2])
+        return x + length * direction
 
-def test_annulus(ks, ds, ns,
-        middle_params, entropies, samples, prefix,
-        filename, visual = False, figsize = (6,4)
-        ):
-    global results_vanilla, results_kbary
+    samples_source = np.random.uniform(low=-1, high=1, size=(n, d))
+    samples_target = np.random.uniform(low=-1, high=1, size=(n, d))
+    samples_target = np.apply_along_axis(lambda x: transport_map(x, 2), 1, samples_target)
+    
+    b1 = np.ones(samples_target.shape[0])/samples_target.shape[0]
+    b2 = np.ones(samples_source.shape[0])/samples_source.shape[0]
 
+    return (samples_source, samples_target, b1, b2)
+
+def generate_annulus_data(d, n):
     def transport_map(x, length = 1):
         direction = np.zeros_like(x)
         direction[0:2] = x[0:2]
         direction[0:2] /= np.linalg.norm(direction[0:2])
         return x + length * direction
+
+    angles = np.random.uniform(0, 2*np.pi, size=n)
+    radiuses = np.sqrt(np.random.uniform(0, 1, size=n))
+    samples_source_2d = radiuses * np.vstack([np.sin(angles), np.cos(angles)])
+    samples_source = np.random.uniform(low=-1, high=1, size=(n, d))
+    samples_source[:,0:2] = samples_source_2d.T
+
+    # Generate targets
+    angles = np.random.uniform(0, 2*np.pi, size=n)
+    radiuses = np.sqrt(np.random.uniform(0, 1, size=n))
+    samples_target_2d = radiuses * np.vstack([np.sin(angles), np.cos(angles)])
+    samples_target = np.random.uniform(low=-1, high=1, size=(n, d))
+    samples_target[:, 0:2] = samples_target_2d.T
+    samples_target = np.apply_along_axis(lambda x: transport_map(x, 2), 1, samples_target)
+
+    xs = samples_source
+    xt = samples_target
+    b1 = np.ones(samples_target.shape[0])/samples_target.shape[0]
+    b2 = np.ones(samples_source.shape[0])/samples_source.shape[0]
+
+    return (xs, xt, b1, b2)
+
+def test_runs(data_generator,
+        ks, ds, ns,
+        middle_params, entropies, samples, prefix,
+        filename, visual = False, figsize = (6,4)
+        ):
 
     # k = 4
     # ks = np.hstack([range(1,11), range(15,31,5)]).astype(int)
@@ -1634,21 +1331,8 @@ def test_annulus(ks, ds, ns,
             d = ds[k_ind]
             entropy = entropies[k_ind]
             middle_param = middle_params[k_ind]
-            angles = np.random.uniform(0, 2*np.pi, size=n)
-            radiuses = np.sqrt(np.random.uniform(0, 1, size=n))
-            samples_source_2d = radiuses * np.vstack([np.sin(angles), np.cos(angles)])
-            samples_source = np.random.uniform(low=-1, high=1, size=(n, d))
-            samples_source[:,0:2] = samples_source_2d.T
-
-            # Generate targets
-            angles = np.random.uniform(0, 2*np.pi, size=n)
-            radiuses = np.sqrt(np.random.uniform(0, 1, size=n))
-            samples_target_2d = radiuses * np.vstack([np.sin(angles), np.cos(angles)])
-            samples_target = np.random.uniform(low=-1, high=1, size=(n, d))
-            samples
-            samples_target[:, 0:2] = samples_target_2d.T
-            samples_target = np.apply_along_axis(lambda x: transport_map(x, 2), 1, samples_target)
-
+            
+            (samples_source, samples_target, b1, b2) = data_generator(d, n)
             xs = samples_source
             xt = samples_target
 
@@ -1659,8 +1343,6 @@ def test_annulus(ks, ds, ns,
             # pl.show()
             
             # Run Sinkhorn
-            b1 = np.ones(samples_target.shape[0])/samples_target.shape[0]
-            b2 = np.ones(samples_source.shape[0])/samples_source.shape[0]
             cost = ot.sinkhorn2(b1, b2, ot.dist(samples_source, samples_target), 1)
             results_vanilla[sample, k_ind] = cost
             print("Sinkhorn: {}".format(cost))
@@ -3463,11 +3145,6 @@ if __name__ == "__main__":
     # test_gaussian_mixture_varn()
     # test_gaussian_mixture_vard()
     # test_gaussian_mixture_vark()
-
-    # test_split_data_uniform_vard()
-    # test_split_data_uniform_vark()
-    # test_split_data_uniform_varn()
-    # test_split_data_uniform_visual()
 
     test_annulus_all()
 
