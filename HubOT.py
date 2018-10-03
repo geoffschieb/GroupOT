@@ -2538,7 +2538,7 @@ def test_bio_data():
     outfile = "haem_small_new_centered.bin"
 
     # entr_regs = np.array([10.0])**np.linspace(-3, 0, 7)
-    entr_regs = np.array([10.0])**np.linspace(-3, -1, 7)
+    entr_regs = np.array([10.0])**np.linspace(-3, -1, 5)
     # entr_regs = np.array([10.0])**range(-2, 0)
     # entr_regs = np.array([10.0])**range(-1, 0)
     # gl_params = np.array([10.0])**range(-3, 3)
