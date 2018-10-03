@@ -1283,14 +1283,15 @@ def test_split_data_uniform_all():
 def test_annulus_all():
     prefix = "annulus_results"
 
-    d = 30
+    d = 2
     n = 100
     # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
-    ks = [10]
-    entropies_l = [0.05]
+    ks = [3]
+    # entropies_l = [0.05]
     # entropies_l = [1.0, 10.0]
+    entropies_l = [0.1]
     # middle_params_l = [0.5, 1.0, 2.0]
-    middle_params_l = [0.2]
+    middle_params_l = [1.0]
     samples = 1
 
     # Varying k
@@ -1301,7 +1302,9 @@ def test_annulus_all():
             middle_params = np.repeat(middle_param, len(ks))
             entropies = np.repeat(entropy, len(ks))
             filename = "vark_d_{}_n_{}_middle_{:.2e}_entropy_{:.2e}.bin".format(d, n, middle_param, entropy)
-            test_runs(generate_annulus_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
+            # test_runs(generate_annulus_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Annulus")
+            # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Cube")
+            test_runs(generate_cluster_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Clusters")
             # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
 
 #     # Pictures
@@ -1326,10 +1329,35 @@ def generate_split_uniform_data(d, n):
     samples_target = np.random.uniform(low=-1, high=1, size=(n, d))
     samples_target = np.apply_along_axis(lambda x: transport_map(x, 2), 1, samples_target)
     
-    b1 = np.ones(samples_target.shape[0])/samples_target.shape[0]
-    b2 = np.ones(samples_source.shape[0])/samples_source.shape[0]
+    b1 = np.ones(samples_source.shape[0])/samples_source.shape[0]
+    b2 = np.ones(samples_target.shape[0])/samples_target.shape[0]
 
     return (samples_source, samples_target, b1, b2)
+
+def generate_cluster_data(d, n):
+    centers_source = np.array([
+            [-2, 2],
+            [0, 0],
+            [-2, -1]
+            ])
+
+    centers_target = np.array([
+            [2, 3],
+            [1, 0.5],
+            [0, -1]
+            ])
+
+    xs = 0.3*np.random.randn(n, 2)
+    xt = 0.3*np.random.randn(n, 2)
+    labels_s = np.random.randint(3, size = (n,))
+    labels_t = np.random.randint(3, size = (n,))
+    xs += centers_source[labels_s,:]
+    xt += centers_target[labels_t,:]
+    b1 = np.ones(xs.shape[0])/xs.shape[0]
+    b2 = np.ones(xt.shape[0])/xt.shape[0]
+
+    return (xs, xt, b1, b2)
+
 
 def generate_annulus_data(d, n):
     def transport_map(x, length = 1):
@@ -1362,7 +1390,7 @@ def generate_annulus_data(d, n):
 def test_runs(data_generator,
         ks, ds, ns,
         middle_params, entropies, samples, prefix,
-        filename, visual = False, figsize = (6,4)
+        filename, visual = False, figsize = (4,4), visual_filename = "Annulus",
         ):
 
     # k = 4
@@ -1404,9 +1432,22 @@ def test_runs(data_generator,
             # pl.show()
             
             # Run Sinkhorn
-            cost = ot.sinkhorn2(b1, b2, ot.dist(samples_source, samples_target), 1)
+            cost = ot.emd2(b1, b2, ot.dist(samples_source, samples_target), 1)
             results_vanilla[sample, k_ind] = cost
             print("Sinkhorn: {}".format(cost))
+
+            if visual:
+                transport_plan = ot.emd(b1, b2, ot.dist(samples_source, samples_target))
+                fig = pl.figure(figsize = figsize)
+                ax = pl.axes(aspect = 1.0)
+                ot.plot.plot2D_samples_mat(xs, xt, transport_plan, c=[.5, .5, .5])
+                pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+                pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+                # pl.plot(zs[:, 0], zs[:, 1], '<c', label='Mid')
+                # ot.plot.plot2D_samples_mat(zs, xt, gammas[1], c=[1, .5, .5])
+                # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
+                pl.savefig(os.path.join("Figures", "{}_ot.png".format(visual_filename)), dpi = 300)
+                pl.close(fig)
 
             # results = estimate_distances(b1, b2, samples_source, samples_target, ks, 1)
             # pl.plot(ks, results)
@@ -1417,39 +1458,49 @@ def test_runs(data_generator,
             # cluster_cost = estimate_w2_cluster(samples_source, samples_target, gammas)
             # print("Cluster cost: {}".format(cluster_cost))
 
-            # Fixed weights
-            ret = reweighted_clusters(b1, b2, samples_source, samples_target, k, [1.0, middle_param, 1.0], entropy, equal_weights = True, tol = 1e-7)
-            if ret is not None:
-                (zs1, zs2, gammas) = ret
-                # cluster_cost_equal = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = True)
-                cluster_cost_equal = estimate_w2_cluster(samples_source, samples_target, gammas)
-                cluster_cost_equal_nocor = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = False)
-                print("Fixed weights cost: {}".format(cluster_cost_equal))
-                print("Fixed weights cost, no correction: {}".format(cluster_cost_equal_nocor))
-                results_cluster_ot_fixed[sample, k_ind] = cluster_cost_equal
-                results_cluster_ot_fixed_nocor[sample, k_ind] = cluster_cost_equal_nocor
+            # # Fixed weights
+            # ret = reweighted_clusters(b1, b2, samples_source, samples_target, k, [1.0, middle_param, 1.0], entropy, equal_weights = True, tol = 1e-7)
+            # if ret is not None:
+            #     (zs1, zs2, gammas) = ret
+            #     # cluster_cost_equal = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = True)
+            #     cluster_cost_equal = estimate_w2_cluster(samples_source, samples_target, gammas)
+            #     cluster_cost_equal_nocor = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = False)
+            #     print("Fixed weights cost: {}".format(cluster_cost_equal))
+            #     print("Fixed weights cost, no correction: {}".format(cluster_cost_equal_nocor))
+            #     results_cluster_ot_fixed[sample, k_ind] = cluster_cost_equal
+            #     results_cluster_ot_fixed_nocor[sample, k_ind] = cluster_cost_equal_nocor
 
-                if visual:
-                # if True:
-                    # fixed weights plot
-                    fig = pl.figure(figsize = figsize)
-                    pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
-                    pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
-                    pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
-                    pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
-                    ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
-                    ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
-                    ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
-                    # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
-                    pl.savefig(os.path.join("Figures","Annulus_fixed.png"), dpi = 300)
-                    pl.close(fig)
-            else:
-                results_cluster_ot_fixed[sample, k_ind] = np.nan
-                results_cluster_ot_fixed_nocor[sample, k_ind] = np.nan
-                print("NaN encountered")
+            #     if visual:
+            #     # if True:
+            #         # fixed weights plot
+            #         fig = pl.figure(figsize = figsize)
+            #         pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+            #         pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+            #         pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
+            #         pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
+            #         ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
+            #         ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
+            #         ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
+            #         # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
+            #         pl.savefig(os.path.join("Figures","Annulus_fixed.png"), dpi = 300)
+            #         pl.close(fig)
+            # else:
+            #     results_cluster_ot_fixed[sample, k_ind] = np.nan
+            #     results_cluster_ot_fixed_nocor[sample, k_ind] = np.nan
+            #     print("NaN encountered")
 
-            # Run hubot
-            # (zs1, zs2, gammas) = cluster_ot(b1, b2,
+            # # Run hubot
+            # # (zs1, zs2, gammas) = cluster_ot(b1, b2,
+            # #         samples_source, samples_target, k, k,
+            # #         [1.0, middle_param, 1.0],
+            # #         np.array([entropy, entropy, entropy]),
+            # #         verbose = True,
+            # #         warm_start = True,
+            # #         relax_outside = [np.inf, np.inf],
+            # #         inner_tol = 1e-7, tol = 1e-6,
+            # #         zs1_start = zs1, zs2_start = zs2, gammas_start = gammas,
+            # #         plot_iterations = False)
+            # ret = cluster_ot(b1, b2,
             #         samples_source, samples_target, k, k,
             #         [1.0, middle_param, 1.0],
             #         np.array([entropy, entropy, entropy]),
@@ -1457,80 +1508,71 @@ def test_runs(data_generator,
             #         warm_start = True,
             #         relax_outside = [np.inf, np.inf],
             #         inner_tol = 1e-7, tol = 1e-6,
-            #         zs1_start = zs1, zs2_start = zs2, gammas_start = gammas,
             #         plot_iterations = False)
-            ret = cluster_ot(b1, b2,
-                    samples_source, samples_target, k, k,
-                    [1.0, middle_param, 1.0],
-                    np.array([entropy, entropy, entropy]),
-                    verbose = True,
-                    warm_start = True,
-                    relax_outside = [np.inf, np.inf],
-                    inner_tol = 1e-7, tol = 1e-6,
-                    plot_iterations = False)
-            if ret is not None:
-                (zs1, zs2, gammas) = ret
-                cluster_cost = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = True)
-                cluster_cost_no_correction = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = False)
-                cluster_cost_old = estimate_w2_cluster(samples_source, samples_target, gammas)
-                results_cluster_ot[sample, k_ind] = cluster_cost
-                results_cluster_ot_nocor[sample, k_ind] = cluster_cost_no_correction
-                print("Double cluster cost: {}".format(cluster_cost))
-                print("Double cluster cost, old way: {}".format(cluster_cost_old))
-                print("Double cluster cost, no correction: {}".format(cluster_cost_no_correction))
+            # if ret is not None:
+            #     (zs1, zs2, gammas) = ret
+            #     cluster_cost = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = True)
+            #     cluster_cost_no_correction = estimate_w2_middle(samples_source, samples_target, zs1, zs2, gammas, bias_correction = False)
+            #     cluster_cost_old = estimate_w2_cluster(samples_source, samples_target, gammas)
+            #     results_cluster_ot[sample, k_ind] = cluster_cost
+            #     results_cluster_ot_nocor[sample, k_ind] = cluster_cost_no_correction
+            #     print("Double cluster cost: {}".format(cluster_cost))
+            #     print("Double cluster cost, old way: {}".format(cluster_cost_old))
+            #     print("Double cluster cost, no correction: {}".format(cluster_cost_no_correction))
 
 
-                # print(zs1)
-                # print(zs2)
+            #     # print(zs1)
+            #     # print(zs2)
 
-                if visual:
-                    # hubOT plot
-                    fig = pl.figure(figsize = figsize)
-                    pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
-                    pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
-                    pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
-                    pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
-                    ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
-                    ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
-                    ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
-                    # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
-                    pl.savefig(os.path.join("Figures","Annulus_hubot.png"), dpi = 300)
-                    pl.close(fig)
-            else:
-                results_cluster_ot[sample, k_ind] = np.nan
-                results_cluster_ot_nocor[sample, k_ind] = np.nan
-                print("NaN encountered")
+            #     if visual:
+            #         # hubOT plot
+            #         fig = pl.figure(figsize = figsize)
+            #         pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+            #         pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+            #         pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
+            #         pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
+            #         ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
+            #         ot.plot.plot2D_samples_mat(zs1, zs2, gammas[1], c=[.5, .5, .5])
+            #         ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
+            #         # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
+            #         pl.savefig(os.path.join("Figures","Annulus_hubot.png"), dpi = 300)
+            #         pl.close(fig)
+            # else:
+            #     results_cluster_ot[sample, k_ind] = np.nan
+            #     results_cluster_ot_nocor[sample, k_ind] = np.nan
+            #     print("NaN encountered")
 
 
-            # Run hubot with map middle transport
-            ret = cluster_ot_map(b1, b2, samples_source, samples_target, k, [1.0, middle_param, 1.0], entropy, verbose = True, tol = 1e-6, warm_start = True)
-            if ret is not None:
-                (zs1, zs2, gammas) = ret
-                cluster_cost_map = estimate_w2_middle(samples_source, samples_target, zs1, zs2, [gammas[0], np.eye(k)/k, gammas[1]], bias_correction = True)
-                cluster_cost_map_nocor = estimate_w2_middle(samples_source, samples_target, zs1, zs2, [gammas[0], np.eye(k)/k, gammas[1]], bias_correction = False)
-                print("Map cluster cost: {}".format(cluster_cost_map))
-                print("Map cluster cost, no correction: {}".format(cluster_cost_map_nocor))
-                results_cluster_ot_map[sample, k_ind] = cluster_cost_map
-                results_cluster_ot_map_nocor[sample, k_ind] = cluster_cost_map_nocor
+            # # Run hubot with map middle transport
+            # ret = cluster_ot_map(b1, b2, samples_source, samples_target, k, [1.0, middle_param, 1.0], entropy, verbose = True, tol = 1e-6, warm_start = True)
+            # if ret is not None:
+            #     (zs1, zs2, gammas) = ret
+            #     cluster_cost_map = estimate_w2_middle(samples_source, samples_target, zs1, zs2, [gammas[0], np.eye(k)/k, gammas[1]], bias_correction = True)
+            #     cluster_cost_map_nocor = estimate_w2_middle(samples_source, samples_target, zs1, zs2, [gammas[0], np.eye(k)/k, gammas[1]], bias_correction = False)
+            #     print("Map cluster cost: {}".format(cluster_cost_map))
+            #     print("Map cluster cost, no correction: {}".format(cluster_cost_map_nocor))
+            #     results_cluster_ot_map[sample, k_ind] = cluster_cost_map
+            #     results_cluster_ot_map_nocor[sample, k_ind] = cluster_cost_map_nocor
 
-                if visual:
-                    # map plot
-                    fig = pl.figure(figsize = figsize)
-                    pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
-                    pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
-                    pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
-                    pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
-                    ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
-                    ot.plot.plot2D_samples_mat(zs1, zs2, np.eye(k), c=[.5, .5, .5])
-                    ot.plot.plot2D_samples_mat(zs2, xt, gammas[1], c=[1, .5, .5])
-                    # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
-                    pl.savefig(os.path.join("Figures","Annulus_map.png"), dpi = 300)
-                    pl.close(fig)
-            else:
-                results_cluster_ot_map[sample, k_ind] = np.nan
-                results_cluster_ot_map_nocor[sample, k_ind] = np.nan
-                print("NaN encountered")
+            #     if visual:
+            #         # map plot
+            #         fig = pl.figure(figsize = figsize)
+            #         pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+            #         pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+            #         pl.plot(zs1[:, 0], zs1[:, 1], '<c', label='Mid 1')
+            #         pl.plot(zs2[:, 0], zs2[:, 1], '>m', label='Mid 2')
+            #         ot.plot.plot2D_samples_mat(xs, zs1, gammas[0], c=[.5, .5, 1])
+            #         ot.plot.plot2D_samples_mat(zs1, zs2, np.eye(k), c=[.5, .5, .5])
+            #         ot.plot.plot2D_samples_mat(zs2, xt, gammas[1], c=[1, .5, .5])
+            #         # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
+            #         pl.savefig(os.path.join("Figures","Annulus_map.png"), dpi = 300)
+            #         pl.close(fig)
+            # else:
+            #     results_cluster_ot_map[sample, k_ind] = np.nan
+            #     results_cluster_ot_map_nocor[sample, k_ind] = np.nan
+            #     print("NaN encountered")
 
+            # Run HubOT
             ret = kbarycenter(b1, b2, samples_source, samples_target, k, [1.0, 1.0], entropy, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf], tol = 1e-6, inner_tol = 1e-7)
             if ret is not None:
                 (zs, gammas) = ret
@@ -1543,14 +1585,28 @@ def test_runs(data_generator,
                 # if True:
                     # Barycenter plot
                     fig = pl.figure(figsize = figsize)
-                    pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
-                    pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
-                    pl.plot(zs[:, 0], zs[:, 1], '<c', label='Mid')
+                    ax = pl.axes(aspect = 1.0)
                     ot.plot.plot2D_samples_mat(xs, zs, gammas[0], c=[.5, .5, 1])
                     ot.plot.plot2D_samples_mat(zs, xt, gammas[1], c=[1, .5, .5])
+                    pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+                    pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+                    pl.plot(zs[:, 0], zs[:, 1], 'dc', label='Mid')
                     # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
-                    pl.savefig(os.path.join("Figures", "Annulus_kbary.png"), dpi = 300)
+                    pl.savefig(os.path.join("Figures", "{}_kbary.png".format(visual_filename)), dpi = 300)
                     pl.close(fig)
+
+                    # Barycenter plot, straight
+                    fig = pl.figure(figsize = figsize)
+                    ax = pl.axes(aspect = 1.0)
+                    # newtarget = map_from_clusters(xt, xs, [gamma.T for gamma in reversed(gammas)])
+                    newsource = map_from_clusters(xs, xt, gammas)
+                    plot_transport_map(xt, newsource, c = [.5, .5, .5])
+                    pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+                    pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+                    # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
+                    pl.savefig(os.path.join("Figures", "{}_kbary_straight.png".format(visual_filename)), dpi = 300)
+                    pl.close(fig)
+
             else:
                 results_kbary[sample, k_ind] = np.nan
                 print("NaN encountered")
@@ -2584,7 +2640,7 @@ def test_bio_data():
     label_samples = [100, 100, 100]
     # label_samples = [10, 10, 10, 10]
     # outfile = "pancreas.bin"
-    outfile = "haem3_new_centered.bin"
+    outfile = "haem3_new_uncentered.bin"
 
     # entr_regs = np.array([10.0])**np.linspace(-3, 0, 7)
     entr_regs = np.array([10.0])**np.linspace(-3, -1, 5)
@@ -2722,8 +2778,8 @@ def test_bio_data():
         xt = features["target"][data_ind[trainstr]["target"][sample], :]
         labs = labels["source"][data_ind[trainstr]["source"][sample]]
         labt = labels["target"][data_ind[trainstr]["target"][sample]]
-        xs = xs - np.mean(xs, axis = 0)
-        xt = xt - np.mean(xt, axis = 0)
+        # xs = xs - np.mean(xs, axis = 0)
+        # xt = xt - np.mean(xt, axis = 0)
         # labs_ind =  calc_lab_ind(labs)
         # return (xs, xt, labs, labt, labs_ind)
         print(xs.shape)

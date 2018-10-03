@@ -68,22 +68,41 @@ elif ftype == "bio":
         l = pickle.load(f)
 
     # ## Latex table
-    # vals = []
-    # stds = []
-    # for v in l["test"].values():
-    #     vals.append(np.mean(v[-1,:]))
-    #     stds.append(np.std(v[-1,:]))
-    # outvals = []
-    # print(" & ".join(l["test"].keys()))
-    # for val in vals:
-    #     outvals.append("{:.2f}".format(100 * val))
-    # print("Mean acc & " + " & ".join(outvals) + "\\\\")
-    # outvals = []
-    # for std in stds:
-    #     outvals.append("{:.2f}".format(100 * std))
-    # print("Std & " + " & ".join(outvals) + "\\\\")
+    name_dict = {
+            "ot" : "OT",
+            "ot_entr" : "OT-ER",
+            "sa" : "SA",
+            "ot_gl" : "OT-L1L2",
+            "ot_kmeans" : "k-means OT",
+            "ot_kbary" : "NAME",
+            "noadj" : "NN",
+            "tca" : "TCA",
+            "mnn" : "MNN"
+            }
 
-#     ## All entries
+    order = ["ot_kbary", "mnn", "ot", "ot_entr", "ot_gl", "ot_kmeans", "sa", "tca", "noadj"]
+    # order = ["sa", "ot"]
+
+    for i in range(3):
+        vals = []
+        stds = []
+        print(30 * '-')
+        for elem in order:
+            v = l["test"][elem]
+            ind = 6-i if v.shape[0] == 7 else 2-i
+            vals.append(np.mean(v[ind,:]))
+            stds.append(np.std(v[ind,:]))
+        outvals = []
+        print(" & ".join([r"\mc{" + name_dict[elem] + r"}" for elem in order]))
+        for val in vals:
+            outvals.append("{:.2f}".format(100 * val))
+        print("Mean acc & " + " & ".join(outvals) + "\\\\")
+        outvals = []
+        for std in stds:
+            outvals.append("{:.2f}".format(100 * std))
+        print("Std & " + " & ".join(outvals) + "\\\\")
+
+    ## All entries
     for (k, v) in l["test"].items():
         print(30*'-')
         print(k)
