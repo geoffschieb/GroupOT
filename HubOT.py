@@ -385,6 +385,54 @@ def constraint_ot(b1, lb, M, entr_reg,
 
     return gamma2
 
+def alternating_min(a, b, xs, xt, k,
+        entr_reg = 1.0,
+        tol = 1e-8,
+        max_iters = 10000):
+    converged = False
+
+    its = 0
+    n = xs.shape[0]
+    A = np.zeros((n, k))
+    B = np.zeros((k, n))
+    A[:k,:k] = np.eye(k)
+    B[:k,:k] = np.eye(k)
+    C = ot.dist(xs, xt)
+
+    while not converged and its < max_iters:
+        print("Iteration: {}".format(its))
+        its += 1
+        A_old = copy.copy(A)
+        B_old = copy.copy(B)
+        M = np.exp(-np.dot(A.T, C)/entr_reg)
+        # print(np.linalg.lstsq(A, a)[0].shape)
+        # print(np.sum(M, axis = 1).shape)
+        u = np.linalg.lstsq(A, a)[0]/np.sum(M, axis = 1)
+        u[u < 0] = 0.0 
+        B = u.reshape(-1, 1) * M
+
+        M = np.exp(-np.dot(C, B.T)/entr_reg)
+        v = np.linalg.lstsq(B.T, b)[0]/np.sum(M, axis = 0)
+        v[v < 0] = 0.0
+        A = v.reshape(1, -1) * M
+
+        err = (np.linalg.norm(A - A_old) + np.linalg.norm(B - B_old))
+        print("Change: {}".format(err))
+
+        if err < tol:
+            converged = True
+
+    return (A, B)
+
+def test_alternating_min():
+    global A, B
+    xs = np.random.randn(20,2)
+    xt = np.random.randn(20,2)
+    a = np.ones(20)/20
+    b = np.ones(20)/20
+
+    (A, B) = alternating_min(a, b, xs, xt, 5)
+
 def test_constraint_ot():
     global xs, ys
     xs = np.vstack([range(4), np.zeros(4)]).T
@@ -2529,13 +2577,14 @@ def test_bio_data():
     # np.random.seed(42*42)
     np.random.seed(42**3)
 
-    perclass = {"source": 100, "target": 100}
+    # perclass = {"source": 100, "target": 100}
     samples = {"train": 20, "test": 20}
     # samples = {"train": 1, "test": 1}
-    label_samples = [20, 20, 20]
+    # label_samples = [20, 20, 20]
+    label_samples = [100, 100, 100]
     # label_samples = [10, 10, 10, 10]
     # outfile = "pancreas.bin"
-    outfile = "haem_small_new_centered.bin"
+    outfile = "haem3_new_centered.bin"
 
     # entr_regs = np.array([10.0])**np.linspace(-3, 0, 7)
     entr_regs = np.array([10.0])**np.linspace(-3, -1, 5)
@@ -2553,7 +2602,7 @@ def test_bio_data():
     # ks = np.array([3, 5, 10, 20, 30, 50])
     # ks = np.array([3, 5, 10, 20, 30, 50])
     ks = np.array([3, 6, 9, 12, 20, 30])
-    ds = np.array([10, 20, 30, 40, 50, 60, 60])
+    ds = np.array([10, 20, 30, 40, 50, 60])
     middle_params = [0.5, 1.0, 2.0]
     # middle_params = [1.0]
 
@@ -2562,63 +2611,65 @@ def test_bio_data():
     # ks = np.array([2])**range(5, 6)
 
     estimators = {
-            "ot_gl": {
-                "function": "ot_gl",
-                "parameter_ranges": [entr_regs, gl_params]
-                },
+            # "ot_gl": {
+            #     "function": "ot_gl",
+            #     "parameter_ranges": [entr_regs, gl_params]
+            #     },
             "ot": {
                 "function": "ot",
                 "parameter_ranges": []
                 },
-            # "ot_map": {
-            #     "function": "ot_map",
-            #     "parameter_ranges": [map_params1, map_params2]
-            #     },
             "ot_entr": {
                 "function": "ot_entr",
                 "parameter_ranges": [entr_regs]
                 },
-            "ot_kmeans": {
-                "function": "ot_kmeans",
-                "parameter_ranges": [ks]
-                },
-            "ot_2kbary": {
-                "function": "ot_2kbary",
-                "parameter_ranges": [entr_regs, ks, middle_params]
-                },
-            "ot_2kbary_fixed": {
-                "function": "ot_2kbary_fixed",
-                "parameter_ranges": [entr_regs, ks, middle_params]
-                },
-            # "ot_2kbary_map": {
-            #     "function": "ot_2kbary_map",
+            # "ot_kmeans": {
+            #     "function": "ot_kmeans",
+            #     "parameter_ranges": [ks]
+            #     },
+            # "ot_2kbary": {
+            #     "function": "ot_2kbary",
+            #     "parameter_ranges": [entr_regs, ks, middle_params]
+            #     },
+            # "ot_2kbary_fixed": {
+            #     "function": "ot_2kbary_fixed",
             #     "parameter_ranges": [entr_regs, ks, middle_params]
             #     },
             "ot_kbary": {
                 "function": "ot_kbary",
                 "parameter_ranges": [entr_regs, ks]
             },
-            "noadj": {
-                "function": "noadj",
-                "parameter_ranges": []
-                },
+            # "noadj": {
+            #     "function": "noadj",
+            #     "parameter_ranges": []
+            #     },
             "sa": {
                 "function": "sa",
                 "parameter_ranges": [ds]
                 },
-            "tca": {
-                "function": "tca",
-                "parameter_ranges": [ds]
-                },
+            # "tca": {
+            #     "function": "tca",
+            #     "parameter_ranges": [ds]
+            #     },
+            # "mnn": {
+            #     "function": "mnn",
+            #     "parameter_ranges": []
+            # }
             # Exclude
             # "coral": {
             #     "function": "coral",
             #     "parameter_ranges": []
             #     }
-            "mnn": {
-                "function": "mnn",
-                "parameter_ranges": []
-            }
+            # Exclude
+            # "ot_2kbary_map": {
+            #     "function": "ot_2kbary_map",
+            #     "parameter_ranges": [entr_regs, ks, middle_params]
+            #     },
+            # Exclude
+            # "ot_map": {
+            #     "function": "ot_map",
+            #     "parameter_ranges": [map_params1, map_params2]
+            #     },
             }
 
     domain_data = {}
@@ -3355,3 +3406,4 @@ if __name__ == "__main__":
     # test_annulus_all()
     # test_split_data_uniform_all()
     test_bio_data()
+    # test_alternating_min()
