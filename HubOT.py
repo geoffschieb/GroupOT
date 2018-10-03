@@ -1328,6 +1328,7 @@ def test_annulus_all():
     ds = (np.array([2])**np.linspace(2, 8, 10)).astype(int)
     ns = 10*ds
     k = 10
+    samples = 20
     for entropy in entropies_l:
         for middle_param in middle_params_l:
             ks = np.repeat(k, len(ns))
