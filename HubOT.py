@@ -1318,27 +1318,26 @@ def test_annulus_all():
             ks = np.repeat(k, len(ns))
             middle_params = np.repeat(middle_param, len(ks))
             entropies = np.repeat(entropy, len(ks))
-            filename = "vark_k_{}_n_{}_middle_{:.2e}_entropy_{:.2e}.bin".format(k, n, middle_param, entropy)
+            filename = "varn_k_{}_n_{}_middle_{:.2e}_entropy_{:.2e}.bin".format(k, n, middle_param, entropy)
             test_runs(generate_annulus_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = False, visual_filename = "Annulus")
             # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Cube")
             # test_runs(generate_cluster_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Clusters")
             # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
 
-#     # Varying d
-#     ns = (np.array([10.0])**np.linspace(1.0, 2.7, 20)).astype(int)
-#     d = 30
-#     k = 10
-#     for entropy in entropies_l:
-#         for middle_param in middle_params_l:
-#             ds = np.repeat(d, len(ns))
-#             ks = np.repeat(k, len(ns))
-#             middle_params = np.repeat(middle_param, len(ks))
-#             entropies = np.repeat(entropy, len(ks))
-#             filename = "vark_k_{}_n_{}_middle_{:.2e}_entropy_{:.2e}.bin".format(k, n, middle_param, entropy)
-#             test_runs(generate_annulus_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = False, visual_filename = "Annulus")
-#             # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Cube")
-#             # test_runs(generate_cluster_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Clusters")
-#             # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
+    # # Varying d
+    # ds = (np.array([2])**np.linspace(2, 8, 10)).astype(int)
+    # ns = 10*ds
+    # k = 10
+    # for entropy in entropies_l:
+    #     for middle_param in middle_params_l:
+    #         ks = np.repeat(k, len(ns))
+    #         middle_params = np.repeat(middle_param, len(ks))
+    #         entropies = np.repeat(entropy, len(ks))
+    #         filename = "vard_k_{}_middle_{:.2e}_entropy_{:.2e}.bin".format(k, middle_param, entropy)
+    #         test_runs(generate_annulus_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = False, visual_filename = "Annulus")
+    #         # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Cube")
+    #         # test_runs(generate_cluster_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Clusters")
+    #         # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
 
 #     # Pictures
 #     # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
