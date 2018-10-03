@@ -2602,7 +2602,7 @@ def test_bio_data():
     # ks = np.array([3, 5, 10, 20, 30, 50])
     # ks = np.array([3, 5, 10, 20, 30, 50])
     ks = np.array([3, 6, 9, 12, 20, 30])
-    ds = np.array([10, 20, 30, 40, 50, 60])
+    ds = np.array([10, 20, 30, 40, 50, 60, 70])
     middle_params = [0.5, 1.0, 2.0]
     # middle_params = [1.0]
 
@@ -2611,10 +2611,10 @@ def test_bio_data():
     # ks = np.array([2])**range(5, 6)
 
     estimators = {
-            # "ot_gl": {
-            #     "function": "ot_gl",
-            #     "parameter_ranges": [entr_regs, gl_params]
-            #     },
+            "ot_gl": {
+                "function": "ot_gl",
+                "parameter_ranges": [entr_regs, gl_params]
+                },
             "ot": {
                 "function": "ot",
                 "parameter_ranges": []
@@ -2623,10 +2623,10 @@ def test_bio_data():
                 "function": "ot_entr",
                 "parameter_ranges": [entr_regs]
                 },
-            # "ot_kmeans": {
-            #     "function": "ot_kmeans",
-            #     "parameter_ranges": [ks]
-            #     },
+            "ot_kmeans": {
+                "function": "ot_kmeans",
+                "parameter_ranges": [ks]
+                },
             # "ot_2kbary": {
             #     "function": "ot_2kbary",
             #     "parameter_ranges": [entr_regs, ks, middle_params]
@@ -2635,26 +2635,26 @@ def test_bio_data():
             #     "function": "ot_2kbary_fixed",
             #     "parameter_ranges": [entr_regs, ks, middle_params]
             #     },
-            # "ot_kbary": {
-            #     "function": "ot_kbary",
-            #     "parameter_ranges": [entr_regs, ks]
-            # },
-            # "noadj": {
-            #     "function": "noadj",
-            #     "parameter_ranges": []
-            #     },
+            "ot_kbary": {
+                "function": "ot_kbary",
+                "parameter_ranges": [entr_regs, ks]
+            },
+            "noadj": {
+                "function": "noadj",
+                "parameter_ranges": []
+                },
             "sa": {
                 "function": "sa",
                 "parameter_ranges": [ds]
                 },
-            # "tca": {
-            #     "function": "tca",
-            #     "parameter_ranges": [ds]
-            #     },
-            # "mnn": {
-            #     "function": "mnn",
-            #     "parameter_ranges": []
-            # }
+            "tca": {
+                "function": "tca",
+                "parameter_ranges": [ds]
+                },
+            "mnn": {
+                "function": "mnn",
+                "parameter_ranges": []
+            }
             # Exclude
             # "coral": {
             #     "function": "coral",
