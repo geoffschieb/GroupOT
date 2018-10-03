@@ -2572,7 +2572,7 @@ def test_opt_grid():
 #     pl.show()
 
 def test_bio_data():
-    global data_ind, labels, xs, xt, labs, labt
+    global data_ind, labels, xs, xt, labs, labt, features
 
     # np.random.seed(42*42)
     np.random.seed(42**3)
@@ -2723,7 +2723,7 @@ def test_bio_data():
         labs = labels["source"][data_ind[trainstr]["source"][sample]]
         labt = labels["target"][data_ind[trainstr]["target"][sample]]
         xs = xs - np.mean(xs, axis = 0)
-        xt = xt - np.mean(xs, axis = 0)
+        xt = xt - np.mean(xt, axis = 0)
         # labs_ind =  calc_lab_ind(labs)
         # return (xs, xt, labs, labt, labs_ind)
         print(xs.shape)
