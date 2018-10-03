@@ -1236,14 +1236,14 @@ def test_annulus_all():
     prefix = "annulus_results"
 
     d = 30
-    n = 1000
-    ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
-    # ks = [50]
-    # entropies_l = [0.1, 1.0]
-    entropies_l = [1.0, 10.0]
-    middle_params_l = [0.5, 1.0, 2.0]
-    # middle_params_l = [2.0]
-    samples = 20
+    n = 100
+    # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
+    ks = [10]
+    entropies_l = [0.05]
+    # entropies_l = [1.0, 10.0]
+    # middle_params_l = [0.5, 1.0, 2.0]
+    middle_params_l = [0.2]
+    samples = 1
 
     # Varying k
     for entropy in entropies_l:
@@ -1253,7 +1253,7 @@ def test_annulus_all():
             middle_params = np.repeat(middle_param, len(ks))
             entropies = np.repeat(entropy, len(ks))
             filename = "vark_d_{}_n_{}_middle_{:.2e}_entropy_{:.2e}.bin".format(d, n, middle_param, entropy)
-            test_runs(generate_annulus_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = False)
+            test_runs(generate_annulus_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
             # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
 
 #     # Pictures
@@ -2535,7 +2535,7 @@ def test_bio_data():
     label_samples = [20, 20, 20]
     # label_samples = [10, 10, 10, 10]
     # outfile = "pancreas.bin"
-    outfile = "haem_small_new.bin"
+    outfile = "haem_small_new_centered.bin"
 
     # entr_regs = np.array([10.0])**np.linspace(-3, 0, 7)
     entr_regs = np.array([10.0])**np.linspace(-3, -1, 7)
@@ -2671,6 +2671,8 @@ def test_bio_data():
         xt = features["target"][data_ind[trainstr]["target"][sample], :]
         labs = labels["source"][data_ind[trainstr]["source"][sample]]
         labt = labels["target"][data_ind[trainstr]["target"][sample]]
+        xs = xs - np.mean(xs, axis = 0)
+        xt = xt - np.mean(xs, axis = 0)
         # labs_ind =  calc_lab_ind(labs)
         # return (xs, xt, labs, labt, labs_ind)
         print(xs.shape)
