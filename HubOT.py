@@ -2667,46 +2667,38 @@ def test_bio_data():
     # ks = np.array([2])**range(5, 6)
 
     estimators = {
-            "ot_gl": {
-                "function": "ot_gl",
-                "parameter_ranges": [entr_regs, gl_params]
-                },
-            "ot": {
-                "function": "ot",
-                "parameter_ranges": []
-                },
-            "ot_entr": {
-                "function": "ot_entr",
-                "parameter_ranges": [entr_regs]
-                },
-            "ot_kmeans": {
-                "function": "ot_kmeans",
-                "parameter_ranges": [ks]
-                },
-            # "ot_2kbary": {
-            #     "function": "ot_2kbary",
-            #     "parameter_ranges": [entr_regs, ks, middle_params]
+            # "ot_gl": {
+            #     "function": "ot_gl",
+            #     "parameter_ranges": [entr_regs, gl_params]
             #     },
-            # "ot_2kbary_fixed": {
-            #     "function": "ot_2kbary_fixed",
-            #     "parameter_ranges": [entr_regs, ks, middle_params]
+            # "ot": {
+            #     "function": "ot",
+            #     "parameter_ranges": []
             #     },
-            "ot_kbary": {
-                "function": "ot_kbary",
-                "parameter_ranges": [entr_regs, ks]
-            },
-            "noadj": {
-                "function": "noadj",
-                "parameter_ranges": []
-                },
-            "sa": {
-                "function": "sa",
-                "parameter_ranges": [ds]
-                },
-            "tca": {
-                "function": "tca",
-                "parameter_ranges": [ds]
-                },
+            # "ot_entr": {
+            #     "function": "ot_entr",
+            #     "parameter_ranges": [entr_regs]
+            #     },
+            # "ot_kmeans": {
+            #     "function": "ot_kmeans",
+            #     "parameter_ranges": [ks]
+            #     },
+            # "ot_kbary": {
+            #     "function": "ot_kbary",
+            #     "parameter_ranges": [entr_regs, ks]
+            # },
+            # "noadj": {
+            #     "function": "noadj",
+            #     "parameter_ranges": []
+            #     },
+            # "sa": {
+            #     "function": "sa",
+            #     "parameter_ranges": [ds]
+            #     },
+            # "tca": {
+            #     "function": "tca",
+            #     "parameter_ranges": [ds]
+            #     },
             "mnn": {
                 "function": "mnn",
                 "parameter_ranges": []
@@ -2725,6 +2717,14 @@ def test_bio_data():
             # "ot_map": {
             #     "function": "ot_map",
             #     "parameter_ranges": [map_params1, map_params2]
+            #     },
+            # "ot_2kbary": {
+            #     "function": "ot_2kbary",
+            #     "parameter_ranges": [entr_regs, ks, middle_params]
+            #     },
+            # "ot_2kbary_fixed": {
+            #     "function": "ot_2kbary_fixed",
+            #     "parameter_ranges": [entr_regs, ks, middle_params]
             #     },
             }
 
