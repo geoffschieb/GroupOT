@@ -60,6 +60,7 @@ elif ftype == "bio":
     # infile = "haem3.bin"
     # infile = "haem_small_new.bin"
     infile = "haem3_new_centered.bin"
+    # infile = "haem3_new_uncentered.bin"
 
     print("-" * 30)
     print("Results for bio data:")
@@ -80,8 +81,9 @@ elif ftype == "bio":
             "mnn" : "MNN"
             }
 
-    order = ["ot_kbary", "mnn", "ot", "ot_entr", "ot_gl", "ot_kmeans", "sa", "tca", "noadj"]
+    # order = ["ot_kbary", "mnn", "ot", "ot_entr", "ot_gl", "ot_kmeans", "sa", "tca", "noadj"]
     # order = ["sa", "ot"]
+    order = ["mnn"]
 
     for i in range(3):
         vals = []
