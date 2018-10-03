@@ -1588,7 +1588,7 @@ def test_runs(data_generator,
             #     print("NaN encountered")
 
             # Run HubOT
-            ret = kbarycenter(b1, b2, samples_source, samples_target, k, [1.0, 1.0], entropy, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf], tol = 1e-6, inner_tol = 1e-7)
+            ret = kbarycenter(b1, b2, samples_source, samples_target, k, [1.0, 1.0], entropy, verbose = True, warm_start = True, relax_outside = [np.inf, np.inf], tol = 1e-6, inner_tol = 1e-7, max_iter = 300)
             if ret is not None:
                 (zs, gammas) = ret
                 # # (zs, gammas) = kbarycenter(b1, b2, samples_source, samples_target, 16, [1.0, 1.0], 1, verbose = True, warm_start = True)
