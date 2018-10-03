@@ -2635,10 +2635,10 @@ def test_bio_data():
             #     "function": "ot_2kbary_fixed",
             #     "parameter_ranges": [entr_regs, ks, middle_params]
             #     },
-            "ot_kbary": {
-                "function": "ot_kbary",
-                "parameter_ranges": [entr_regs, ks]
-            },
+            # "ot_kbary": {
+            #     "function": "ot_kbary",
+            #     "parameter_ranges": [entr_regs, ks]
+            # },
             # "noadj": {
             #     "function": "noadj",
             #     "parameter_ranges": []
