@@ -1285,27 +1285,27 @@ def test_annulus_all():
 
     d = 30
     n = 1000
-    # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
-    ks = [10]
+    ks = np.hstack([range(1,11), range(15,31,5), range(31, 201, 20]).astype(int)
+    # ks = [10]
     # entropies_l = [0.05]
     # entropies_l = [1.0, 10.0]
     entropies_l = [0.1]
     # middle_params_l = [0.5, 1.0, 2.0]
     middle_params_l = [1.0]
-    samples = 1
+    samples = 20
 
-#     # Varying k
-#     for entropy in entropies_l:
-#         for middle_param in middle_params_l:
-#             ds = np.repeat(d, len(ks))
-#             ns = np.repeat(n, len(ks))
-#             middle_params = np.repeat(middle_param, len(ks))
-#             entropies = np.repeat(entropy, len(ks))
-#             filename = "vark_d_{}_n_{}_middle_{:.2e}_entropy_{:.2e}.bin".format(d, n, middle_param, entropy)
-#             # test_runs(generate_annulus_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Annulus")
-#             # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Cube")
-#             test_runs(generate_cluster_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Clusters")
-#             # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
+    # Varying k
+    for entropy in entropies_l:
+        for middle_param in middle_params_l:
+            ds = np.repeat(d, len(ks))
+            ns = np.repeat(n, len(ks))
+            middle_params = np.repeat(middle_param, len(ks))
+            entropies = np.repeat(entropy, len(ks))
+            filename = "vark2.bin"
+            test_runs(generate_annulus_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = False, visual_filename = "annulus")
+            # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Cube")
+            # test_runs(generate_cluster_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = False, visual_filename = "Clusters")
+            # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
 
     # # Varying n
     # ns = (np.array([10.0])**np.linspace(1.0, 2.7, 20)).astype(int)
@@ -1325,22 +1325,44 @@ def test_annulus_all():
     #         # test_runs(generate_cluster_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Clusters")
     #         # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
 
-    # Varying d
-    # ds = (np.array([2])**np.linspace(2, 8, 10)).astype(int)
-    ds = (np.array([2])**np.linspace(6, 8, 4)).astype(int)
-    ns = 10*ds
-    k = 10
-    samples = 1
-    for entropy in entropies_l:
-        for middle_param in middle_params_l:
-            ks = np.repeat(k, len(ns))
-            middle_params = np.repeat(middle_param, len(ks))
-            entropies = np.repeat(entropy, len(ks))
-            filename = "vard2.bin"
-            test_runs(generate_annulus_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = False, visual_filename = "Annulus")
-            # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Cube")
-            # test_runs(generate_cluster_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Clusters")
-            # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
+    # # Varying d
+    # # ds = (np.array([2])**np.linspace(2, 8, 10)).astype(int)
+    # ds = (np.array([2])**np.linspace(6, 8, 4)).astype(int)
+    # ns = 10*ds
+    # k = 10
+    # samples = 1
+    # for entropy in entropies_l:
+    #     for middle_param in middle_params_l:
+    #         ks = np.repeat(k, len(ns))
+    #         middle_params = np.repeat(middle_param, len(ks))
+    #         entropies = np.repeat(entropy, len(ks))
+    #         filename = "vard2.bin"
+    #         test_runs(generate_annulus_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = False, visual_filename = "Annulus")
+    #         # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Cube")
+    #         # test_runs(generate_cluster_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Clusters")
+    #         # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
+
+    # # Pictures
+    # d = 2
+    # n = 100
+    # # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
+    # ks = [10]
+    # # entropies_l = [0.05]
+    # # entropies_l = [1.0, 10.0]
+    # entropy = 0.1
+    # # middle_params_l = [0.5, 1.0, 2.0]
+    # middle_param = 1.0
+    # samples = 1
+
+    # ds = np.repeat(d, len(ks))
+    # ns = np.repeat(n, len(ks))
+    # middle_params = np.repeat(middle_param, len(ks))
+    # entropies = np.repeat(entropy, len(ks))
+    # filename = "vark_d_{}_n_{}_middle_{:.2e}_entropy_{:.2e}.bin".format(d, n, middle_param, entropy)
+    # test_runs(generate_annulus_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "annulus")
+    # # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Cube")
+    # # test_runs(generate_cluster_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Clusters")
+    # # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
 
 #     # Pictures
 #     # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
@@ -1425,7 +1447,7 @@ def generate_annulus_data(d, n):
 def test_runs(data_generator,
         ks, ds, ns,
         middle_params, entropies, samples, prefix,
-        filename, visual = False, figsize = (4,4), visual_filename = "Annulus",
+        filename, visual = False, figsize = (5,4), visual_filename = "annulus",
         ):
 
     # k = 4
@@ -1478,7 +1500,7 @@ def test_runs(data_generator,
             if visual:
                 transport_plan = ot.emd(b1, b2, ot.dist(samples_source, samples_target))
                 fig = pl.figure(figsize = figsize)
-                ax = pl.axes(aspect = 1.0)
+                # ax = pl.axes(aspect = 1.0)
                 ot.plot.plot2D_samples_mat(xs, xt, transport_plan, c=[.5, .5, .5])
                 pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
                 pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
@@ -1624,7 +1646,7 @@ def test_runs(data_generator,
                 # if True:
                     # Barycenter plot
                     fig = pl.figure(figsize = figsize)
-                    ax = pl.axes(aspect = 1.0)
+                    # ax = pl.axes(aspect = 1.0)
                     ot.plot.plot2D_samples_mat(xs, zs, gammas[0], c=[.5, .5, 1])
                     ot.plot.plot2D_samples_mat(zs, xt, gammas[1], c=[1, .5, .5])
                     pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
@@ -1636,7 +1658,7 @@ def test_runs(data_generator,
 
                     # Barycenter plot, straight
                     fig = pl.figure(figsize = figsize)
-                    ax = pl.axes(aspect = 1.0)
+                    # ax = pl.axes(aspect = 1.0)
                     # newtarget = map_from_clusters(xt, xs, [gamma.T for gamma in reversed(gammas)])
                     newsource = map_from_clusters(xs, xt, gammas)
                     plot_transport_map(xt, newsource, c = [.5, .5, .5])
@@ -3498,7 +3520,7 @@ if __name__ == "__main__":
     # test_bio_diag3()
     # test_pancreas_data()
 
-    # test_annulus_all()
+    test_annulus_all()
     # test_split_data_uniform_all()
-    test_bio_data()
+    # test_bio_data()
     # test_alternating_min()
