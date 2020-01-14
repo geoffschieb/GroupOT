@@ -59,8 +59,8 @@ if ftype == "pancreas":
 elif ftype == "bio":
     # infile = "haem3.bin"
     # infile = "haem_small_new.bin"
-    infile = "haem3_new_centered.bin"
-    # infile = "haem3_new_uncentered.bin"
+    # infile = "haem3_new_centered.bin"
+    infile = "haem3_new_uncentered.bin"
 
     print("-" * 30)
     print("Results for bio data:")
@@ -75,16 +75,37 @@ elif ftype == "bio":
             "sa" : "SA",
             "ot_gl" : "OT-L1L2",
             "ot_kmeans" : "k-means OT",
-            "ot_kbary" : "NAME",
+            "ot_kbary" : "FOT",
             "noadj" : "NN",
             "tca" : "TCA",
             "mnn" : "MNN"
             }
 
-    # order = ["ot_kbary", "mnn", "ot", "ot_entr", "ot_gl", "ot_kmeans", "sa", "tca", "noadj"]
+    order = ["ot_kbary", "mnn", "ot", "ot_entr", "ot_gl", "ot_kmeans", "sa", "tca", "noadj"]
     # order = ["sa", "ot"]
-    order = ["mnn"]
+    # order = ["mnn"]
 
+    # # Horizontal table
+    # for i in range(3):
+    #     vals = []
+    #     stds = []
+    #     print(30 * '-')
+    #     for elem in order:
+    #         v = l["test"][elem]
+    #         ind = 6-i if v.shape[0] == 7 else 2-i
+    #         vals.append(np.mean(v[ind,:]))
+    #         stds.append(np.std(v[ind,:]))
+    #     outvals = []
+    #     print(" & ".join([r"\mc{" + name_dict[elem] + r"}" for elem in order]))
+    #     for val in vals:
+    #         outvals.append("{:.2f}".format(100 * val))
+    #     print("Mean acc & " + " & ".join(outvals) + "\\\\")
+    #     outvals = []
+    #     for std in stds:
+    #         outvals.append("{:.2f}".format(100 * std))
+    #     print("Std & " + " & ".join(outvals) + "\\\\")
+
+    # Vertical table
     for i in range(3):
         vals = []
         stds = []
@@ -95,14 +116,19 @@ elif ftype == "bio":
             vals.append(np.mean(v[ind,:]))
             stds.append(np.std(v[ind,:]))
         outvals = []
-        print(" & ".join([r"\mc{" + name_dict[elem] + r"}" for elem in order]))
-        for val in vals:
-            outvals.append("{:.2f}".format(100 * val))
-        print("Mean acc & " + " & ".join(outvals) + "\\\\")
-        outvals = []
-        for std in stds:
-            outvals.append("{:.2f}".format(100 * std))
-        print("Std & " + " & ".join(outvals) + "\\\\")
+        print("Method & Error & Std")
+        for j in range(len(order)):
+            print(r"\ml{" + name_dict[order[j]] + "} & " +
+                    "{:.2f}".format(100 * vals[j]) + " & "
+                    "{:.2f}".format(100 * stds[j]) + "\\\\")
+        # print(" & ".join([r"\mc{" + name_dict[elem] + r"}" for elem in order]))
+        # for val in vals:
+        #     outvals.append("{:.2f}".format(100 * val))
+        # print("Mean acc & " + " & ".join(outvals) + "\\\\")
+        # outvals = []
+        # for std in stds:
+        #     outvals.append("{:.2f}".format(100 * std))
+        # print("Std & " + " & ".join(outvals) + "\\\\")
 
     ## All entries
     for (k, v) in l["test"].items():

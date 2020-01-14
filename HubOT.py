@@ -3,10 +3,11 @@ import scipy.stats as stats
 from scipy.io import loadmat, savemat
 import matplotlib
 import ot
+import ot.plot
 import scipy as sp
 from scipy.special import kl_div, entr
 from sklearn import manifold, datasets, decomposition
-import matplotlib.pylab as pl
+import matplotlib.pyplot as pl
 import copy
 import time
 from mpl_toolkits.mplot3d import axes3d 
@@ -21,6 +22,16 @@ import subprocess
 from sklearn import preprocessing
 
 #%% Utility functions
+
+def set_fig_params(case):
+    # pl.subplots_adjust(**{'left': 0.19271045301649306, 'right': 0.963, 'bottom': 0.17794444444444446, 'top': 0.8991666666666667, 'wspace': 0.2, 'hspace': 0.2})
+    # pl.subplots_adjust(**{'left': .1, 'right': 0.95, 'bottom': 0.17794444444444446, 'top': 0.8991666666666667, 'wspace': 0.2, 'hspace': 0.2})
+    if case == 'a':
+        pl.subplots_adjust(**{'left': 0.19271045301649306, 'right': 0.963, 'bottom': 0.17794444444444446, 'top': 0.8991666666666667, 'wspace': 0.2, 'hspace': 0.2})
+    elif case == 'b':
+        pl.subplots_adjust(**{'left': 0.19271045301649306, 'right': 0.963, 'bottom': 0.17794444444444446, 'top': 0.8991666666666667, 'wspace': 0.2, 'hspace': 0.2})
+    elif case == 'c':
+        pl.subplots_adjust(**{'left' : 0.17255555555555555, 'right': 0.963, 'bottom': 0.17069444444444445, 'top': 0.8991666666666667, 'wspace': 0.2, 'hspace': 0.2})
 
 def opt_grid(fun, *args):
     results = np.empty(tuple(map(len, args)))
@@ -314,7 +325,7 @@ def cluster_ot(b1, b2, xs, xt, k1, k2,
             ot.plot.plot2D_samples_mat(zs2, xt, gammas[2], c=[1, .5, .5])
             # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
             mkdir(os.path.join("Figures","iterations"))
-            pl.savefig(os.path.join("Figures","iterations","{}.png".format(its)), dpi = 300)
+            pl.savefig(os.path.join("Figures","iterations","{}.png".format(its)), dpi = 600)
             pl.close(fig)
 
         err = np.abs(cost - cost_old)/max(np.abs(cost), 1e-12)
@@ -1281,7 +1292,8 @@ def test_split_data_uniform_all():
     # test_annulus(ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
 
 def test_annulus_all():
-    prefix = "annulus_results"
+    # prefix = "annulus_results"
+    prefix = "cube2_results"
 
     d = 30
     n = 1000
@@ -1290,27 +1302,28 @@ def test_annulus_all():
     # entropies_l = [0.05]
     # entropies_l = [1.0, 10.0]
     entropies_l = [0.1]
+    # entropies_l = [0.01]
     # middle_params_l = [0.5, 1.0, 2.0]
     middle_params_l = [1.0]
     samples = 20
 
-    # Varying k
-    for entropy in entropies_l:
-        for middle_param in middle_params_l:
-            ds = np.repeat(d, len(ks))
-            ns = np.repeat(n, len(ks))
-            middle_params = np.repeat(middle_param, len(ks))
-            entropies = np.repeat(entropy, len(ks))
-            filename = "vark2.bin"
-            test_runs(generate_annulus_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = False, visual_filename = "annulus")
-            # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Cube")
-            # test_runs(generate_cluster_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = False, visual_filename = "Clusters")
-            # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
+    # # Varying k
+    # for entropy in entropies_l:
+    #     for middle_param in middle_params_l:
+    #         ds = np.repeat(d, len(ks))
+    #         ns = np.repeat(n, len(ks))
+    #         middle_params = np.repeat(middle_param, len(ks))
+    #         entropies = np.repeat(entropy, len(ks))
+    #         filename = "vark2.bin"
+    #         test_runs(generate_annulus_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = False, visual_filename = "annulus")
+    #         # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Cube")
+    #         # test_runs(generate_cluster_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = False, visual_filename = "Clusters")
+    #         # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
 
-    # # Varying n
-    # ns = (np.array([10.0])**np.linspace(1.0, 2.7, 20)).astype(int)
-    # d = 30
-    # k = 10
+    # # # Varying n
+    # # ns = (np.array([10.0])**np.linspace(1.0, 2.7, 20)).astype(int)
+    # # d = 30
+    # # k = 10
     # samples = 20
     # for entropy in entropies_l:
     #     for middle_param in middle_params_l:
@@ -1342,27 +1355,27 @@ def test_annulus_all():
     #         # test_runs(generate_cluster_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Clusters")
     #         # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
 
-    # # Pictures
-    # d = 2
-    # n = 100
-    # # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
-    # ks = [10]
-    # # entropies_l = [0.05]
-    # # entropies_l = [1.0, 10.0]
-    # entropy = 0.1
-    # # middle_params_l = [0.5, 1.0, 2.0]
-    # middle_param = 1.0
-    # samples = 1
+    # Pictures
+    d = 30
+    n = 100
+    # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
+    ks = [4]
+    # entropies_l = [0.05]
+    # entropies_l = [1.0, 10.0]
+    entropy = 0.1
+    # middle_params_l = [0.5, 1.0, 2.0]
+    middle_param = 1.0
+    samples = 1
 
-    # ds = np.repeat(d, len(ks))
-    # ns = np.repeat(n, len(ks))
-    # middle_params = np.repeat(middle_param, len(ks))
-    # entropies = np.repeat(entropy, len(ks))
-    # filename = "vark_d_{}_n_{}_middle_{:.2e}_entropy_{:.2e}.bin".format(d, n, middle_param, entropy)
+    ds = np.repeat(d, len(ks))
+    ns = np.repeat(n, len(ks))
+    middle_params = np.repeat(middle_param, len(ks))
+    entropies = np.repeat(entropy, len(ks))
+    filename = "vark_d_{}_n_{}_middle_{:.2e}_entropy_{:.2e}.bin".format(d, n, middle_param, entropy)
     # test_runs(generate_annulus_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "annulus")
-    # # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Cube")
-    # # test_runs(generate_cluster_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Clusters")
-    # # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True)
+    # test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "uniform")
+    # test_runs(generate_cluster_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Clusters")
+    test_runs(generate_split_uniform_data, ks, ds, ns, middle_params, entropies, samples, prefix, filename, visual = True, visual_filename = "Cube2")
 
 #     # Pictures
 #     # ks = np.hstack([range(1,11), range(15,51,5)]).astype(int)
@@ -1498,16 +1511,19 @@ def test_runs(data_generator,
             print("Sinkhorn: {}".format(cost))
 
             if visual:
+                plotting_params = {"markersize" : 9, "markeredgewidth": 2.0}
                 transport_plan = ot.emd(b1, b2, ot.dist(samples_source, samples_target))
                 fig = pl.figure(figsize = figsize)
                 # ax = pl.axes(aspect = 1.0)
-                ot.plot.plot2D_samples_mat(xs, xt, transport_plan, c=[.5, .5, .5])
-                pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
-                pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+                ot.plot.plot2D_samples_mat(xs, xt, transport_plan, c=[.6, .6, .6])
+                pl.plot(xs[:, 0], xs[:, 1], '+r', label='Source samples', **plotting_params)
+                pl.plot(xt[:, 0], xt[:, 1], 'xb', label='Target samples', **plotting_params)
                 # pl.plot(zs[:, 0], zs[:, 1], '<c', label='Mid')
                 # ot.plot.plot2D_samples_mat(zs, xt, gammas[1], c=[1, .5, .5])
                 # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
-                pl.savefig(os.path.join("Figures", "{}_ot.png".format(visual_filename)), dpi = 300)
+                set_fig_params('a')
+                pl.tight_layout()
+                pl.savefig(os.path.join("Figures", "{}_ot.png".format(visual_filename)), dpi = 600)
                 pl.close(fig)
 
             # results = estimate_distances(b1, b2, samples_source, samples_target, ks, 1)
@@ -1647,13 +1663,15 @@ def test_runs(data_generator,
                     # Barycenter plot
                     fig = pl.figure(figsize = figsize)
                     # ax = pl.axes(aspect = 1.0)
-                    ot.plot.plot2D_samples_mat(xs, zs, gammas[0], c=[.5, .5, 1])
-                    ot.plot.plot2D_samples_mat(zs, xt, gammas[1], c=[1, .5, .5])
-                    pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
-                    pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
-                    pl.plot(zs[:, 0], zs[:, 1], 'dc', label='Mid')
+                    ot.plot.plot2D_samples_mat(xs, zs, gammas[0], c=[1, .5, .5])
+                    ot.plot.plot2D_samples_mat(zs, xt, gammas[1], c=[.5, .5, 1])
+                    pl.plot(xs[:, 0], xs[:, 1], '+r', label='Source samples', **plotting_params)
+                    pl.plot(xt[:, 0], xt[:, 1], 'xb', label='Target samples', **plotting_params)
+                    pl.plot(zs[:, 0], zs[:, 1], '^k', label='Mid', **plotting_params)
                     # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
-                    pl.savefig(os.path.join("Figures", "{}_kbary.png".format(visual_filename)), dpi = 300)
+                    set_fig_params('b')
+                    pl.tight_layout()
+                    pl.savefig(os.path.join("Figures", "{}_kbary.png".format(visual_filename)), dpi = 600)
                     pl.close(fig)
 
                     # Barycenter plot, straight
@@ -1662,10 +1680,13 @@ def test_runs(data_generator,
                     # newtarget = map_from_clusters(xt, xs, [gamma.T for gamma in reversed(gammas)])
                     newsource = map_from_clusters(xs, xt, gammas)
                     plot_transport_map(xt, newsource, c = [.5, .5, .5])
-                    pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
-                    pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
+                    # plot_transport_map(newtarget, xs, c = [.5, .5, .5])
+                    pl.plot(xs[:, 0], xs[:, 1], '+r', label='Source samples', **plotting_params)
+                    pl.plot(xt[:, 0], xt[:, 1], 'xb', label='Target samples', **plotting_params)
                     # plot_transport_map(xt, map_from_clusters(xs, xt, gammas))
-                    pl.savefig(os.path.join("Figures", "{}_kbary_straight.png".format(visual_filename)), dpi = 300)
+                    set_fig_params('c')
+                    pl.tight_layout()
+                    pl.savefig(os.path.join("Figures", "{}_kbary_straight.png".format(visual_filename)), dpi = 600)
                     pl.close(fig)
 
             else:
